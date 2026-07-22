@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>
-        {{ config('app.name', 'Paymenter') }}
+        {{ config('app.name', 'vPay') }}
         @isset($title)
         - {{ $title }}
         @endisset
@@ -19,8 +19,8 @@
     <link rel="icon" href="{{ Storage::url(config('settings.favicon')) }}">
     @endif
     @isset($title)
-    <meta content="{{ isset($title) ? config('app.name', 'Paymenter') . ' - ' . $title : config('app.name', 'Paymenter') }}" property="og:title">
-    <meta content="{{ isset($title) ? config('app.name', 'Paymenter') . ' - ' . $title : config('app.name', 'Paymenter') }}" name="title">
+    <meta content="{{ isset($title) ? config('app.name', 'vPay') . ' - ' . $title : config('app.name', 'vPay') }}" property="og:title">
+    <meta content="{{ isset($title) ? config('app.name', 'vPay') . ' - ' . $title : config('app.name', 'vPay') }}" name="title">
     @endisset
     @isset($description)
     <meta content="{{ $description }}" property="og:description">

@@ -2,8 +2,8 @@
 
 return [
     'name' => 'Default',
-    'author' => 'Paymenter',
-    'url' => 'https://paymenter.org',
+    'author' => 'Proniit Cloud',
+    'url' => 'https://proniit.com',
 
     'settings' => [
         [
@@ -44,7 +44,7 @@ return [
             'name' => 'home_page_text',
             'label' => 'Home Page Text',
             'type' => 'markdown',
-            'default' => 'Welcome to Paymenter!',
+            'default' => 'Welcome to vKloud vPay!',
         ],
         [
             'name' => 'primary',

@@ -18,7 +18,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Paymenter'),
+    'name' => env('APP_NAME', 'vPay'),
 
     'version' => 'development',
 
