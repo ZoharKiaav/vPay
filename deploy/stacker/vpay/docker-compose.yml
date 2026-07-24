@@ -24,6 +24,7 @@ services:
 
   vpay:
     image: ghcr.io/zoharkiaav/vpay:latest
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       database:
@@ -33,6 +34,7 @@ services:
     ports:
       - "80"
     environment:
+      APP_NAME: ${APP_NAME:-vPay}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
       APP_KEY: ${APP_KEY}
