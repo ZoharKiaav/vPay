@@ -13,7 +13,7 @@
                 </div>
               
             </div>
-            <a class="bg-background-secondary border border-neutral p-2 rounded-lg transition-colors group mt-4 mb-6 flex items-center gap-2 text-base/50 hover:text-base" href="https://paymenter.org" target="_blank">
+            <a class="bg-background-secondary border border-neutral p-2 rounded-lg transition-colors group mt-4 mb-6 flex items-center gap-2 text-base/50 hover:text-base" href="https://proniit.com" target="_blank">
                
 <p class="text-sm text-base/50 mt-4 mb-6"> © {{ date('Y') }} vKloud. Powered by vPay. </p>
         </div>
