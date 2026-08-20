@@ -163,6 +163,82 @@ class Stacker extends Server
             $operation,
         ) + 1;
     }
+    public function buildServicePropertyUpdates(
+        array $response,
+        string $operation,
+        int $intentVersion,
+    ): array {
+        if (empty($response['operationId'])) {
+            throw new Exception(
+                'Stacker response has no operation ID',
+            );
+        }
+
+        $allowedStates = [
+            'accepted',
+            'running',
+            'succeeded',
+            'failed',
+            'cancelled',
+        ];
+
+        if (
+            empty($response['state'])
+            || !in_array($response['state'], $allowedStates, true)
+        ) {
+            throw new Exception(
+                'Stacker response has an invalid operation state',
+            );
+        }
+
+        $updates = [
+            'stacker_operation_id' => [
+                'name' => 'Stacker operation ID',
+                'value' => (string) $response['operationId'],
+            ],
+            'vkloud_service_state' => [
+                'name' => 'vKloud service state',
+                'value' => (string) $response['state'],
+            ],
+            $this->intentVersionPropertyKey($operation) => [
+                'name' => 'Stacker intent version: ' . $operation,
+                'value' => (string) $intentVersion,
+            ],
+        ];
+
+        $resourceId = $response['resource']['resourceId'] ?? null;
+
+        if (is_string($resourceId) && $resourceId !== '') {
+            $updates['stacker_resource_id'] = [
+                'name' => 'Stacker resource ID',
+                'value' => $resourceId,
+            ];
+        }
+
+        return $updates;
+    }
+
+    public function persistProvisioningResponse(
+        Service $service,
+        array $response,
+        string $operation,
+        int $intentVersion,
+    ): array {
+        $updates = $this->buildServicePropertyUpdates(
+            $response,
+            $operation,
+            $intentVersion,
+        );
+
+        foreach ($updates as $key => $property) {
+            $service->properties()->updateOrCreate(
+                ['key' => $key],
+                $property,
+            );
+        }
+
+        return $updates;
+    }
     public function buildIdempotencyKey(
         string $billingServiceId,
         string $operation,
