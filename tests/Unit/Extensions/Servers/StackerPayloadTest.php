@@ -58,6 +58,10 @@ class StackerPayloadTest extends TestCase
             'vpay',
             $payload['context']['requestedBy'],
         );
+        $this->assertSame(
+            '{}',
+            json_encode($payload['requestedConfiguration']),
+        );
     }
 
     public function test_reuses_the_same_key_for_the_same_intent(): void

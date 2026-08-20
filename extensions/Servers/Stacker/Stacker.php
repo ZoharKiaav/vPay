@@ -338,7 +338,9 @@ class Stacker extends Server
                 'templateId' => $product['template_id'],
                 'templateVersion' => $product['template_version'],
             ],
-            'requestedConfiguration' => $requestedConfiguration,
+            'requestedConfiguration' => $requestedConfiguration === []
+                ? (object) []
+                : $requestedConfiguration,
             'context' => [
                 'requestedBy' => 'vpay',
                 'reason' => $reason,
