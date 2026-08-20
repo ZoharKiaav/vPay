@@ -196,7 +196,7 @@ class Stacker extends Server
                 'name' => 'Stacker operation ID',
                 'value' => (string) $response['operationId'],
             ],
-            'vkloud_service_state' => [
+            'stacker_operation_state' => [
                 'name' => 'vKloud service state',
                 'value' => (string) $response['state'],
             ],

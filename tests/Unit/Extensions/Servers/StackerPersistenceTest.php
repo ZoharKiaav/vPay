@@ -52,7 +52,7 @@ class StackerPersistenceTest extends TestCase
 
         $this->assertSame(
             'accepted',
-            $updates['vkloud_service_state']['value'],
+            $updates['stacker_operation_state']['value'],
         );
 
         $this->assertSame(
