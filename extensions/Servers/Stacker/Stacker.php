@@ -375,6 +375,80 @@ class Stacker extends Server
             ),
         ];
     }
+    protected function performLifecycleOperation(
+        Service $service,
+        array $settings,
+        array $properties,
+        string $operation,
+        string $reason,
+    ): bool {
+        $intentVersion = $this->currentIntentVersion(
+            $properties,
+            $operation,
+        );
+
+        $payload = $this->buildProvisioningPayload(
+            $operation,
+            $this->billingCustomerId($service),
+            $this->billingServiceId($service),
+            $settings,
+            $reason,
+            $intentVersion,
+        );
+
+        $response = $this->acceptProvisioning($payload);
+
+        $this->persistProvisioningResponse(
+            $service,
+            $response,
+            $operation,
+            $intentVersion,
+        );
+
+        return true;
+    }
+
+    public function suspendServer(
+        Service $service,
+        $settings,
+        $properties,
+    ): bool {
+        return $this->performLifecycleOperation(
+            $service,
+            $settings,
+            $properties,
+            'suspend',
+            'overdue',
+        );
+    }
+
+    public function unsuspendServer(
+        Service $service,
+        $settings,
+        $properties,
+    ): bool {
+        return $this->performLifecycleOperation(
+            $service,
+            $settings,
+            $properties,
+            'unsuspend',
+            'payment_restored',
+        );
+    }
+
+    public function terminateServer(
+        Service $service,
+        $settings,
+        $properties,
+    ): bool {
+        return $this->performLifecycleOperation(
+            $service,
+            $settings,
+            $properties,
+            'terminate',
+            'cancellation',
+        );
+    }
     public function getConfig($values = []): array
     {
         return [
