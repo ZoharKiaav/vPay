@@ -81,13 +81,13 @@ class StackerPersistenceTest extends TestCase
         $relation = Mockery::mock();
 
         $relation->shouldReceive('updateOrCreate')
-            ->times(4);
+            ->times(5);
 
         $service = Mockery::mock(Service::class)
             ->makePartial();
 
         $service->shouldReceive('properties')
-            ->times(4)
+            ->times(5)
             ->andReturn($relation);
 
         $updates = $this->client()
@@ -98,7 +98,7 @@ class StackerPersistenceTest extends TestCase
                 1,
             );
 
-        $this->assertCount(4, $updates);
+        $this->assertCount(5, $updates);
     }
 
     public function test_rejects_a_response_without_an_operation_id(): void

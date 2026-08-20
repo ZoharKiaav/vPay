@@ -196,6 +196,14 @@ class Stacker extends Server
                 'name' => 'Stacker operation ID',
                 'value' => (string) $response['operationId'],
             ],
+            'stacker_operation_type' => [
+                'name' => 'Stacker operation type',
+                'value' => $operation,
+            ],
+            'stacker_operation_type' => [
+                'name' => 'Stacker operation type',
+                'value' => $operation,
+            ],
             'stacker_operation_state' => [
                 'name' => 'vKloud service state',
                 'value' => (string) $response['state'],
@@ -582,6 +590,41 @@ class Stacker extends Server
         }
 
         return $actions;
+    }
+    public function reconcileOperation(
+        Service $service,
+        array $properties,
+    ): array {
+        $operationId = $properties['stacker_operation_id'] ?? null;
+        $operation = $properties['stacker_operation_type'] ?? null;
+
+        if (!is_string($operationId) || $operationId === '') {
+            throw new Exception(
+                'Service has no Stacker operation to reconcile',
+            );
+        }
+
+        if (!is_string($operation) || $operation === '') {
+            throw new Exception(
+                'Service has no Stacker operation type',
+            );
+        }
+
+        $intentVersion = $this->currentIntentVersion(
+            $properties,
+            $operation,
+        );
+
+        $response = $this->operationStatus($operationId);
+
+        $this->persistProvisioningResponse(
+            $service,
+            $response,
+            $operation,
+            $intentVersion,
+        );
+
+        return $response;
     }
     public function getConfig($values = []): array
     {

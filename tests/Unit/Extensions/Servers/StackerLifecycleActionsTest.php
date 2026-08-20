@@ -38,7 +38,7 @@ class StackerLifecycleActionsTest extends TestCase
         $relation = Mockery::mock();
 
         $relation->shouldReceive('updateOrCreate')
-            ->times(3);
+            ->times(4);
 
         $service = Mockery::mock(Service::class)
             ->makePartial();
@@ -47,7 +47,7 @@ class StackerLifecycleActionsTest extends TestCase
         $service->user_id = 7;
 
         $service->shouldReceive('properties')
-            ->times(3)
+            ->times(4)
             ->andReturn($relation);
 
         return $service;
