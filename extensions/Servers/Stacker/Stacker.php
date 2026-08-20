@@ -449,6 +449,93 @@ class Stacker extends Server
             'cancellation',
         );
     }
+    public function buildServiceStatusPropertyUpdates(
+        array $response,
+    ): array {
+        $allowedStates = [
+            'pending',
+            'provisioning',
+            'active',
+            'suspending',
+            'suspended',
+            'unsuspending',
+            'terminating',
+            'terminated',
+            'failed',
+            'reconciling',
+        ];
+
+        if (
+            empty($response['state'])
+            || !in_array($response['state'], $allowedStates, true)
+        ) {
+            throw new Exception(
+                'Stacker service status has an invalid state',
+            );
+        }
+
+        $updates = [
+            'vkloud_service_state' => [
+                'name' => 'vKloud service state',
+                'value' => (string) $response['state'],
+            ],
+        ];
+
+        $safeFields = [
+            'primaryUrl' => [
+                'key' => 'vkloud_primary_url',
+                'name' => 'Primary URL',
+            ],
+            'displayName' => [
+                'key' => 'vkloud_display_name',
+                'name' => 'Service name',
+            ],
+            'healthStatus' => [
+                'key' => 'vkloud_health_status',
+                'name' => 'Health status',
+            ],
+            'supportReference' => [
+                'key' => 'vkloud_support_reference',
+                'name' => 'Support reference',
+            ],
+        ];
+
+        $customerSafe = $response['customerSafe'] ?? [];
+
+        foreach ($safeFields as $source => $property) {
+            $value = $customerSafe[$source] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                $updates[$property['key']] = [
+                    'name' => $property['name'],
+                    'value' => $value,
+                ];
+            }
+        }
+
+        return $updates;
+    }
+
+    public function refreshServiceStatus(
+        Service $service,
+    ): array {
+        $response = $this->serviceStatus(
+            $this->billingServiceId($service),
+        );
+
+        $updates = $this->buildServiceStatusPropertyUpdates(
+            $response,
+        );
+
+        foreach ($updates as $key => $property) {
+            $service->properties()->updateOrCreate(
+                ['key' => $key],
+                $property,
+            );
+        }
+
+        return $response;
+    }
     public function getConfig($values = []): array
     {
         return [
