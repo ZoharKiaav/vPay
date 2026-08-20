@@ -3,6 +3,7 @@
 namespace Paymenter\Extensions\Servers\Stacker;
 
 use App\Classes\Extension\Server;
+use App\Models\Service;
 use Exception;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -100,6 +101,68 @@ class Stacker extends Server
         );
     }
 
+    public function billingCustomerId(Service $service): string
+    {
+        if (empty($service->user_id)) {
+            throw new Exception(
+                'vPay service has no billing customer',
+            );
+        }
+
+        return (string) $service->user_id;
+    }
+
+    public function billingServiceId(Service $service): string
+    {
+        if (empty($service->id)) {
+            throw new Exception(
+                'vPay service has no stable service ID',
+            );
+        }
+
+        return (string) $service->id;
+    }
+
+    public function intentVersionPropertyKey(
+        string $operation,
+    ): string {
+        $allowedOperations = [
+            'deploy',
+            'suspend',
+            'unsuspend',
+            'terminate',
+            'rotate_credentials',
+            'health_check',
+        ];
+
+        if (!in_array($operation, $allowedOperations, true)) {
+            throw new Exception(
+                'Unsupported Stacker intent operation',
+            );
+        }
+
+        return 'stacker_intent_version_' . $operation;
+    }
+
+    public function currentIntentVersion(
+        array $properties,
+        string $operation,
+    ): int {
+        $key = $this->intentVersionPropertyKey($operation);
+        $version = (int) ($properties[$key] ?? 1);
+
+        return max(1, $version);
+    }
+
+    public function nextIntentVersion(
+        array $properties,
+        string $operation,
+    ): int {
+        return $this->currentIntentVersion(
+            $properties,
+            $operation,
+        ) + 1;
+    }
     public function buildIdempotencyKey(
         string $billingServiceId,
         string $operation,
