@@ -536,6 +536,53 @@ class Stacker extends Server
 
         return $response;
     }
+    public function getActions(
+        Service $service,
+        $settings,
+        $properties,
+    ): array {
+        $actions = [];
+
+        $textProperties = [
+            'vkloud_display_name' => 'Service',
+            'vkloud_service_state' => 'Status',
+            'vkloud_health_status' => 'Health',
+            'vkloud_support_reference' => 'Support reference',
+        ];
+
+        foreach ($textProperties as $key => $label) {
+            $value = $properties[$key] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                $actions[] = [
+                    'label' => $label,
+                    'text' => $value,
+                    'type' => 'text',
+                ];
+            }
+        }
+
+        $primaryUrl = $properties['vkloud_primary_url'] ?? null;
+
+        if (
+            is_string($primaryUrl)
+            && filter_var($primaryUrl, FILTER_VALIDATE_URL)
+            && in_array(
+                parse_url($primaryUrl, PHP_URL_SCHEME),
+                ['http', 'https'],
+                true,
+            )
+        ) {
+            $actions[] = [
+                'name' => 'vkloud_primary_url',
+                'label' => 'Open service',
+                'url' => $primaryUrl,
+                'type' => 'button',
+            ];
+        }
+
+        return $actions;
+    }
     public function getConfig($values = []): array
     {
         return [
