@@ -100,6 +100,104 @@ class Stacker extends Server
         );
     }
 
+    public function buildIdempotencyKey(
+        string $billingServiceId,
+        string $operation,
+        int $intentVersion,
+    ): string {
+        if ($intentVersion < 1) {
+            throw new Exception(
+                'Intent version must be greater than zero',
+            );
+        }
+
+        return sprintf(
+            'vpay:%s:%s:%d',
+            $billingServiceId,
+            $operation,
+            $intentVersion,
+        );
+    }
+
+    public function buildProvisioningPayload(
+        string $operation,
+        string $billingCustomerId,
+        string $billingServiceId,
+        array $product,
+        string $reason,
+        int $intentVersion = 1,
+        array $requestedConfiguration = [],
+    ): array {
+        $allowedOperations = [
+            'deploy',
+            'status',
+            'suspend',
+            'unsuspend',
+            'terminate',
+            'rotate_credentials',
+            'health_check',
+        ];
+
+        $allowedReasons = [
+            'payment_confirmed',
+            'admin_action',
+            'overdue',
+            'payment_restored',
+            'cancellation',
+            'customer_action',
+        ];
+
+        if (!in_array($operation, $allowedOperations, true)) {
+            throw new Exception(
+                'Unsupported Stacker provisioning operation',
+            );
+        }
+
+        if (!in_array($reason, $allowedReasons, true)) {
+            throw new Exception(
+                'Unsupported Stacker provisioning reason',
+            );
+        }
+
+        foreach ([
+            'workload_type',
+            'product_id',
+            'template_id',
+            'template_version',
+        ] as $requiredKey) {
+            if (empty($product[$requiredKey])) {
+                throw new Exception(
+                    'Missing Stacker product setting: '
+                    . $requiredKey,
+                );
+            }
+        }
+
+        return [
+            'contractVersion' => 'v1',
+            'operation' => $operation,
+            'idempotencyKey' => $this->buildIdempotencyKey(
+                $billingServiceId,
+                $operation,
+                $intentVersion,
+            ),
+            'billing' => [
+                'customerId' => $billingCustomerId,
+                'serviceId' => $billingServiceId,
+            ],
+            'product' => [
+                'workloadType' => $product['workload_type'],
+                'productId' => $product['product_id'],
+                'templateId' => $product['template_id'],
+                'templateVersion' => $product['template_version'],
+            ],
+            'requestedConfiguration' => $requestedConfiguration,
+            'context' => [
+                'requestedBy' => 'vpay',
+                'reason' => $reason,
+            ],
+        ];
+    }
     public function getConfig($values = []): array
     {
         return [
