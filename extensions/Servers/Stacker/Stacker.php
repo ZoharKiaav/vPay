@@ -337,6 +337,44 @@ class Stacker extends Server
             ],
         ];
     }
+    public function createServer(
+        Service $service,
+        $settings,
+        $properties,
+    ): array {
+        $intentVersion = $this->currentIntentVersion(
+            $properties,
+            'deploy',
+        );
+
+        $payload = $this->buildProvisioningPayload(
+            'deploy',
+            $this->billingCustomerId($service),
+            $this->billingServiceId($service),
+            $settings,
+            'payment_confirmed',
+            $intentVersion,
+        );
+
+        $response = $this->acceptProvisioning($payload);
+
+        $this->persistProvisioningResponse(
+            $service,
+            $response,
+            'deploy',
+            $intentVersion,
+        );
+
+        return [
+            'operation_id' => $response['operationId'],
+            'service_state' => $response['state'],
+            'resource_id' =>
+                $response['resource']['resourceId'] ?? null,
+            'duplicate' => (bool) (
+                $response['duplicate'] ?? false
+            ),
+        ];
+    }
     public function getConfig($values = []): array
     {
         return [
