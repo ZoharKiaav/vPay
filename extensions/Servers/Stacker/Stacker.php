@@ -1,0 +1,197 @@
+<?php
+
+namespace Paymenter\Extensions\Servers\Stacker;
+
+use App\Classes\Extension\Server;
+use Exception;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+
+class Stacker extends Server
+{
+    protected function shouldVerifyTls(): bool
+    {
+        $value = $this->config('verify_tls');
+
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    protected function endpoint(string $path): string
+    {
+        return rtrim((string) $this->config('host'), '/')
+            . '/api/'
+            . ltrim($path, '/');
+    }
+
+    protected function request(
+        string $method,
+        string $path,
+        array $payload = [],
+    ): array {
+        $request = Http::acceptJson()
+            ->withHeaders([
+                'x-api-key' => (string) $this->config('api_key'),
+            ])
+            ->timeout((int) ($this->config('timeout') ?: 30));
+
+        if (!$this->shouldVerifyTls()) {
+            $request = $request->withoutVerifying();
+        }
+
+        $response = match (strtoupper($method)) {
+            'GET' => $request->get($this->endpoint($path), $payload),
+            'POST' => $request->post($this->endpoint($path), $payload),
+            default => throw new Exception(
+                'Unsupported Stacker HTTP method',
+            ),
+        };
+
+        return $this->validatedJsonResponse($response);
+    }
+
+    protected function validatedJsonResponse(Response $response): array
+    {
+        if (!$response->successful()) {
+            throw new Exception(
+                'Stacker API request failed with HTTP '
+                . $response->status(),
+            );
+        }
+
+        $body = $response->json();
+
+        if (!is_array($body)) {
+            throw new Exception(
+                'Stacker API returned an invalid JSON response',
+            );
+        }
+
+        return $body;
+    }
+
+    public function acceptProvisioning(array $payload): array
+    {
+        return $this->request(
+            'POST',
+            'vkloud/provisioning/v1/accept',
+            $payload,
+        );
+    }
+
+    public function operationStatus(string $operationId): array
+    {
+        return $this->request(
+            'GET',
+            'vkloud/provisioning/v1/operations/'
+                . rawurlencode($operationId),
+        );
+    }
+
+    public function serviceStatus(string $billingServiceId): array
+    {
+        return $this->request(
+            'GET',
+            'vkloud/provisioning/v1/services/'
+                . rawurlencode($billingServiceId),
+        );
+    }
+
+    public function getConfig($values = []): array
+    {
+        return [
+            [
+                'name' => 'host',
+                'type' => 'text',
+                'label' => 'Stacker URL',
+                'placeholder' => 'https://stacker.example.com',
+                'validation' => 'url:http,https',
+                'required' => true,
+            ],
+            [
+                'name' => 'api_key',
+                'type' => 'password',
+                'label' => 'Dedicated vPay provisioning API key',
+                'required' => true,
+                'encrypted' => true,
+            ],
+            [
+                'name' => 'verify_tls',
+                'type' => 'checkbox',
+                'label' => 'Verify TLS certificate',
+                'default' => true,
+                'required' => false,
+            ],
+            [
+                'name' => 'timeout',
+                'type' => 'number',
+                'label' => 'API timeout',
+                'default' => 30,
+                'required' => false,
+                'min_value' => 5,
+                'suffix' => 'seconds',
+            ],
+        ];
+    }
+
+    public function getProductConfig($values = []): array
+    {
+        return [
+            [
+                'name' => 'workload_type',
+                'type' => 'select',
+                'label' => 'vKloud workload type',
+                'required' => true,
+                'options' => [
+                    [
+                        'label' => 'SaaS',
+                        'value' => 'saas',
+                    ],
+                    [
+                        'label' => 'VPStack',
+                        'value' => 'vpstack',
+                    ],
+                ],
+            ],
+            [
+                'name' => 'product_id',
+                'type' => 'text',
+                'label' => 'vKloud product ID',
+                'required' => true,
+            ],
+            [
+                'name' => 'template_id',
+                'type' => 'text',
+                'label' => 'Stacker template ID',
+                'required' => true,
+            ],
+            [
+                'name' => 'template_version',
+                'type' => 'text',
+                'label' => 'Immutable template version',
+                'required' => true,
+            ],
+        ];
+    }
+
+    public function testConfig(): bool|string
+    {
+        try {
+            $this->serviceStatus('__vpay_connection_test__');
+
+            return true;
+        } catch (Exception $exception) {
+            if (
+                $exception->getMessage()
+                === 'Stacker API request failed with HTTP 404'
+            ) {
+                return true;
+            }
+
+            return $exception->getMessage();
+        }
+    }
+}
