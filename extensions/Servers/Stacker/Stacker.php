@@ -626,6 +626,47 @@ class Stacker extends Server
 
         return $response;
     }
+    public function recoverUnknownOutcome(
+        Service $service,
+        array $settings,
+        array $properties,
+        string $operation,
+        string $reason,
+    ): array {
+        $operationId = $properties['stacker_operation_id'] ?? null;
+
+        if (is_string($operationId) && $operationId !== '') {
+            return $this->reconcileOperation(
+                $service,
+                $properties,
+            );
+        }
+
+        $intentVersion = $this->currentIntentVersion(
+            $properties,
+            $operation,
+        );
+
+        $payload = $this->buildProvisioningPayload(
+            $operation,
+            $this->billingCustomerId($service),
+            $this->billingServiceId($service),
+            $settings,
+            $reason,
+            $intentVersion,
+        );
+
+        $response = $this->acceptProvisioning($payload);
+
+        $this->persistProvisioningResponse(
+            $service,
+            $response,
+            $operation,
+            $intentVersion,
+        );
+
+        return $response;
+    }
     public function getConfig($values = []): array
     {
         return [
