@@ -4,10 +4,12 @@ use App\Classes\Settings;
 use App\Console\Commands\CronJob;
 use App\Console\Commands\FetchEmails;
 use App\Console\Commands\ScheduleHeartbeatCommand;
+use App\Console\Commands\ReconcileStackerServices;
 use App\Console\Commands\TelemetryCommand;
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command(ScheduleHeartbeatCommand::class)->description('Updates the last scheduler run time')->everyMinute()->onOneServer();
+Schedule::command(ReconcileStackerServices::class)->description('Reconciles unfinished Stacker provisioning operations')->everyMinute()->withoutOverlapping()->onOneServer();
 Schedule::command(CronJob::class)->description('Runs daily to send out invoices, suspend servers, etc.')->dailyAt(config('settings.cronjob_time', '00:00'))->onOneServer();
 Schedule::command(FetchEmails::class)->description('Import ticket emails using IMAP')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
 
