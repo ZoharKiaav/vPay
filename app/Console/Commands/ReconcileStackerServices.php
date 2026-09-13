@@ -57,9 +57,8 @@ class ReconcileStackerServices extends Command
 
         foreach ($services as $service) {
             try {
-                $response = ExtensionHelper::callService(
+                $response = ExtensionHelper::reconcileServer(
                     $service,
-                    'reconcileOperation',
                 );
 
                 $state = $response['state'] ?? null;
@@ -69,7 +68,7 @@ class ReconcileStackerServices extends Command
                     ['succeeded', 'failed', 'cancelled'],
                     true,
                 )) {
-                    ExtensionHelper::callService(
+                    ExtensionHelper::refreshServerStatus(
                         $service->fresh([
                             'product.server.settings',
                             'product.settings',
@@ -77,7 +76,6 @@ class ReconcileStackerServices extends Command
                             'configs.configOption',
                             'configs.configValue',
                         ]),
-                        'refreshServiceStatus',
                     );
 
                     $terminal++;

@@ -588,6 +588,43 @@ class ExtensionHelper
     }
 
     /**
+     * Reconcile an asynchronous server-extension operation.
+     */
+    public static function reconcileServer(Service $service)
+    {
+        $server = self::checkServer(
+            $service,
+            'reconcileOperation',
+        );
+
+        return self::getExtension(
+            'server',
+            $server->extension,
+            $server->settings,
+        )->reconcileOperation(
+            $service,
+            self::getServiceProperties($service),
+        );
+    }
+
+    /**
+     * Refresh server-extension service status.
+     */
+    public static function refreshServerStatus(Service $service)
+    {
+        $server = self::checkServer(
+            $service,
+            'refreshServiceStatus',
+        );
+
+        return self::getExtension(
+            'server',
+            $server->extension,
+            $server->settings,
+        )->refreshServiceStatus($service);
+    }
+
+    /**
      * Create server
      */
     public static function createServer(Service $service)
