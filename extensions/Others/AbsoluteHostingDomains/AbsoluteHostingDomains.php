@@ -8,6 +8,7 @@ use App\Helpers\ExtensionHelper;
 use App\Models\Service;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingClient;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Models\ManagedDomain;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainCatalogService;
 
 #[ExtensionMeta(
     name: 'Absolute Hosting Domains',
@@ -78,6 +79,11 @@ class AbsoluteHostingDomains extends Extension
                 );
             },
         );
+    }
+
+    public function catalog(): DomainCatalogService
+    {
+        return new DomainCatalogService($this->client());
     }
 
     public function client(): AbsoluteHostingClient
