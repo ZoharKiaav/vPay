@@ -131,6 +131,55 @@ class AbsoluteHostingDomains extends Server
                 'default' => $selectedPeriod,
                 'options' => $periodOptions,
             ],
+            [
+                'name' => 'nameserver_1',
+                'type' => 'text',
+                'label' => 'Primary nameserver',
+                'required' => true,
+                'placeholder' => 'ns1.example.com',
+                'validation' => $this->nameserverValidation(),
+            ],
+            [
+                'name' => 'nameserver_2',
+                'type' => 'text',
+                'label' => 'Secondary nameserver',
+                'required' => true,
+                'placeholder' => 'ns2.example.com',
+                'validation' => $this->nameserverValidation(),
+            ],
+            [
+                'name' => 'nameserver_3',
+                'type' => 'text',
+                'label' => 'Nameserver 3',
+                'required' => false,
+                'placeholder' => 'ns3.example.com',
+                'validation' => $this->optionalNameserverValidation(),
+            ],
+            [
+                'name' => 'nameserver_4',
+                'type' => 'text',
+                'label' => 'Nameserver 4',
+                'required' => false,
+                'placeholder' => 'ns4.example.com',
+                'validation' => $this->optionalNameserverValidation(),
+            ],
+            [
+                'name' => 'nameserver_5',
+                'type' => 'text',
+                'label' => 'Nameserver 5',
+                'required' => false,
+                'placeholder' => 'ns5.example.com',
+                'validation' => $this->optionalNameserverValidation(),
+            ],
+            [
+                'name' => 'epp_code',
+                'type' => 'text',
+                'label' => 'Transfer authorisation code',
+                'required' => $action === 'transfer',
+                'validation' => $action === 'transfer'
+                    ? 'required|string|max:255'
+                    : 'nullable|string|max:255',
+            ],
         ];
     }
 
@@ -242,6 +291,26 @@ class AbsoluteHostingDomains extends Server
                 $fail('The selected domain is not registered and cannot be transferred.');
             }
         };
+    }
+
+    private function nameserverValidation(): array
+    {
+        return [
+            'required',
+            'string',
+            'max:253',
+            'regex:/^(?=.{1,253}\.?$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?$/i',
+        ];
+    }
+
+    private function optionalNameserverValidation(): array
+    {
+        return [
+            'nullable',
+            'string',
+            'max:253',
+            'regex:/^(?=.{1,253}\.?$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?$/i',
+        ];
     }
 
     private function normaliseAction(string $action): string

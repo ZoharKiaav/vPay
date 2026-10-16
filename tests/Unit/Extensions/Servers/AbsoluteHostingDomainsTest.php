@@ -41,6 +41,12 @@ class AbsoluteHostingDomainsTest extends TestCase
                 'domain_sld',
                 'domain_tld',
                 'registration_period',
+                'nameserver_1',
+                'nameserver_2',
+                'nameserver_3',
+                'nameserver_4',
+                'nameserver_5',
+                'epp_code',
             ],
             array_column($config, 'name'),
         );
@@ -66,6 +72,99 @@ class AbsoluteHostingDomainsTest extends TestCase
         );
 
         $this->assertSame('2', $config[3]['default']);
+    }
+
+    public function test_it_exposes_nameserver_fields_for_registration(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertTrue($configByName['nameserver_1']['required']);
+        $this->assertTrue($configByName['nameserver_2']['required']);
+        $this->assertFalse($configByName['nameserver_3']['required']);
+        $this->assertFalse($configByName['nameserver_4']['required']);
+        $this->assertFalse($configByName['nameserver_5']['required']);
+        $this->assertFalse($configByName['epp_code']['required']);
+        $this->assertSame(
+            'nullable|string|max:255',
+            $configByName['epp_code']['validation'],
+        );
+    }
+
+    public function test_it_requires_an_epp_code_for_transfers(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'transfer',
+                'domain_tld' => '.co.za',
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertTrue($configByName['epp_code']['required']);
+        $this->assertSame(
+            'required|string|max:255',
+            $configByName['epp_code']['validation'],
+        );
+    }
+
+    public function test_nameserver_validation_accepts_hostnames(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+        $rules = $configByName['nameserver_1']['validation'];
+
+        $validator = validator(
+            ['nameserver' => 'ns1.example.test'],
+            ['nameserver' => $rules],
+        );
+
+        $this->assertFalse($validator->fails());
+    }
+
+    public function test_nameserver_validation_rejects_invalid_values(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+        $rules = $configByName['nameserver_1']['validation'];
+
+        $validator = validator(
+            ['nameserver' => 'not a nameserver'],
+            ['nameserver' => $rules],
+        );
+
+        $this->assertTrue($validator->fails());
     }
 
     public function test_it_excludes_tlds_without_registration_pricing(): void
