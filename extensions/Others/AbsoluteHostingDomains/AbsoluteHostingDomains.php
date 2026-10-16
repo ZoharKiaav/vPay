@@ -4,12 +4,15 @@ namespace Paymenter\Extensions\Others\AbsoluteHostingDomains;
 
 use App\Attributes\ExtensionMeta;
 use App\Classes\Extension\Extension;
+use App\Helpers\ExtensionHelper;
+use App\Models\Service;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingClient;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Models\ManagedDomain;
 
 #[ExtensionMeta(
     name: 'Absolute Hosting Domains',
     description: 'Domain reseller integration for the Absolute Hosting REST API',
-    version: '0.1.0',
+    version: '0.2.0',
     author: 'vKloud',
 )]
 class AbsoluteHostingDomains extends Extension
@@ -47,6 +50,34 @@ class AbsoluteHostingDomains extends Extension
                 'validation' => 'required|string',
             ],
         ];
+    }
+
+    public function installed(): void
+    {
+        ExtensionHelper::runMigrations(
+            'extensions/Others/AbsoluteHostingDomains/database/migrations'
+        );
+    }
+
+    public function uninstalled(): void
+    {
+        ExtensionHelper::rollbackMigrations(
+            'extensions/Others/AbsoluteHostingDomains/database/migrations'
+        );
+    }
+
+    public function boot(): void
+    {
+        Service::resolveRelationUsing(
+            'managedDomain',
+            function (Service $service) {
+                return $service->hasOne(
+                    ManagedDomain::class,
+                    'service_id',
+                    'id',
+                );
+            },
+        );
     }
 
     public function client(): AbsoluteHostingClient
