@@ -1,0 +1,266 @@
+<?php
+
+namespace Paymenter\Extensions\Servers\AbsoluteHostingDomains;
+
+use App\Attributes\ExtensionMeta;
+use App\Classes\Extension\Server;
+use App\Models\Product;
+use Closure;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingClient;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingException;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainCatalogService;
+
+#[ExtensionMeta(
+    name: 'Absolute Hosting Domains',
+    description: 'Domain checkout integration for the Absolute Hosting reseller API',
+    version: '0.1.0',
+    author: 'vKloud',
+)]
+class AbsoluteHostingDomains extends Server
+{
+    public function getConfig($values = []): array
+    {
+        return [
+            [
+                'name' => 'api_endpoint',
+                'label' => 'API Endpoint',
+                'type' => 'text',
+                'description' => 'Absolute Hosting Domains Reseller REST API endpoint.',
+                'required' => true,
+                'default' => 'https://client.absolutehosting.co.za/modules/addons/DomainsReseller/api/index.php',
+                'validation' => 'required|url',
+            ],
+            [
+                'name' => 'api_username',
+                'label' => 'API Email Address',
+                'type' => 'text',
+                'description' => 'API email address provided in the Domains Reseller configuration.',
+                'required' => true,
+                'encrypted' => true,
+                'validation' => 'required|email',
+            ],
+            [
+                'name' => 'api_key',
+                'label' => 'API Key',
+                'type' => 'password',
+                'description' => 'API key provided in the Domains Reseller configuration.',
+                'required' => true,
+                'encrypted' => true,
+                'validation' => 'required|string',
+            ],
+        ];
+    }
+
+    public function testConfig(): bool|string
+    {
+        try {
+            $this->catalog()->tlds();
+
+            return true;
+        } catch (AbsoluteHostingException $exception) {
+            return $exception->getMessage();
+        }
+    }
+
+    public function getCheckoutConfig(
+        Product $product,
+        array $values = [],
+        array $settings = [],
+    ): array {
+        $action = $this->normaliseAction(
+            (string) ($values['domain_action'] ?? 'register'),
+        );
+
+        $tldOptions = $this->tldOptions();
+        $selectedTld = $this->normaliseSelectedTld(
+            (string) ($values['domain_tld']
+                ?? array_key_first($tldOptions)
+                ?? ''),
+            $tldOptions,
+        );
+
+        $periodOptions = $this->periodOptions($selectedTld);
+        $selectedPeriod = (string) (
+            $values['registration_period']
+                ?? array_key_first($periodOptions)
+                ?? '1'
+        );
+
+        return [
+            [
+                'name' => 'domain_action',
+                'type' => 'radio',
+                'label' => 'Domain action',
+                'required' => true,
+                'default' => $action,
+                'options' => [
+                    'register' => 'Register a new domain',
+                    'transfer' => 'Transfer an existing domain',
+                ],
+            ],
+            [
+                'name' => 'domain_sld',
+                'type' => 'text',
+                'label' => 'Domain name',
+                'required' => true,
+                'placeholder' => 'example',
+                'validation' => [
+                    'required',
+                    'string',
+                    'max:63',
+                    'regex:/^(?:[a-z0-9]|[a-z0-9][a-z0-9-]{0,61}[a-z0-9])$/i',
+                    $this->domainEligibilityRule(
+                        $action,
+                        $selectedTld,
+                    ),
+                ],
+            ],
+            [
+                'name' => 'domain_tld',
+                'type' => 'select',
+                'label' => 'Domain extension',
+                'required' => true,
+                'default' => $selectedTld,
+                'options' => $tldOptions,
+            ],
+            [
+                'name' => 'registration_period',
+                'type' => 'select',
+                'label' => 'Registration period',
+                'required' => true,
+                'default' => $selectedPeriod,
+                'options' => $periodOptions,
+            ],
+        ];
+    }
+
+    public function client(): AbsoluteHostingClient
+    {
+        return new AbsoluteHostingClient(
+            endpoint: (string) $this->config('api_endpoint'),
+            username: (string) $this->config('api_username'),
+            apiKey: (string) $this->config('api_key'),
+        );
+    }
+
+    public function catalog(): DomainCatalogService
+    {
+        return new DomainCatalogService($this->client());
+    }
+
+    private function tldOptions(): array
+    {
+        $pricing = $this->catalog()->pricing();
+        $options = [];
+
+        foreach ($pricing as $tld => $record) {
+            if (!$record['registration_available']) {
+                continue;
+            }
+
+            $registrationPrice = $record['registration_price'];
+            $currencyCode = $record['currency_code'];
+
+            $options[$tld] = sprintf(
+                '%s (%s %s)',
+                $tld,
+                $currencyCode,
+                $registrationPrice,
+            );
+        }
+
+        if ($options === []) {
+            throw new AbsoluteHostingException(
+                'Absolute Hosting returned no registerable TLDs.',
+            );
+        }
+
+        return $options;
+    }
+
+    private function periodOptions(string $tld): array
+    {
+        $pricing = $this->catalog()->pricingFor($tld);
+
+        if ($pricing === null) {
+            throw new AbsoluteHostingException(
+                "Absolute Hosting returned no pricing for {$tld}.",
+            );
+        }
+
+        $options = [];
+
+        foreach ($pricing['years'] as $year) {
+            $label = $year === 1 ? '1 year' : "{$year} years";
+            $options[(string) $year] = $label;
+        }
+
+        if ($options === []) {
+            throw new AbsoluteHostingException(
+                "Absolute Hosting returned no registration periods for {$tld}.",
+            );
+        }
+
+        return $options;
+    }
+
+    private function domainEligibilityRule(
+        string $action,
+        string $tld,
+    ): Closure {
+        return function (
+            string $attribute,
+            mixed $value,
+            Closure $fail,
+        ) use ($action, $tld): void {
+            try {
+                $results = $this->catalog()->availability(
+                    (string) $value,
+                    [$tld],
+                );
+            } catch (AbsoluteHostingException $exception) {
+                $fail($exception->getMessage());
+
+                return;
+            }
+
+            $result = $results[0] ?? null;
+
+            if ($result === null || !$result['is_valid']) {
+                $fail('The selected domain name is invalid.');
+
+                return;
+            }
+
+            if ($action === 'register' && !$result['is_available']) {
+                $fail('The selected domain is not available for registration.');
+
+                return;
+            }
+
+            if ($action === 'transfer' && !$result['is_registered']) {
+                $fail('The selected domain is not registered and cannot be transferred.');
+            }
+        };
+    }
+
+    private function normaliseAction(string $action): string
+    {
+        return in_array($action, ['register', 'transfer'], true)
+            ? $action
+            : 'register';
+    }
+
+    private function normaliseSelectedTld(
+        string $tld,
+        array $options,
+    ): string {
+        $normalised = '.' . strtolower(ltrim(trim($tld), '.'));
+
+        if (array_key_exists($normalised, $options)) {
+            return $normalised;
+        }
+
+        return (string) array_key_first($options);
+    }
+}
