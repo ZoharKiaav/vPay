@@ -3,12 +3,78 @@
 namespace Tests\Unit\Extensions\Servers;
 
 use App\Models\Product;
+use App\Models\Service;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Http;
 use Paymenter\Extensions\Servers\AbsoluteHostingDomains\AbsoluteHostingDomains;
+use stdClass;
 use Tests\TestCase;
 
 class AbsoluteHostingDomainsTest extends TestCase
 {
+    public function test_it_prepares_a_registration_order_context(): void
+    {
+        $context = $this->extension()->prepareDomainOrder(
+            $this->service(),
+            $this->domainProperties(),
+        );
+
+        $this->assertSame('register', $context['action']);
+        $this->assertSame(
+            'example',
+            $context['service_properties']['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $context['service_properties']['domain_tld'],
+        );
+        $this->assertSame([
+            'first_name' => 'Test',
+            'last_name' => 'Registrant',
+            'email' => 'registrant@example.test',
+        ], $context['customer']);
+        $this->assertSame(
+            '+27.100000000',
+            $context['customer_properties']['phone'],
+        );
+        $this->assertSame(
+            '1 Example Road',
+            $context['customer_properties']['address'],
+        );
+    }
+
+    public function test_it_prepares_a_transfer_order_context(): void
+    {
+        $properties = $this->domainProperties();
+        $properties['domain_action'] = 'transfer';
+        $properties['epp_code'] = ' TEST-EPP-CODE ';
+
+        $context = $this->extension()->prepareDomainOrder(
+            $this->service(),
+            $properties,
+        );
+
+        $this->assertSame('transfer', $context['action']);
+        $this->assertSame(
+            'TEST-EPP-CODE',
+            $context['service_properties']['epp_code'],
+        );
+    }
+
+    public function test_it_does_not_prepare_without_loaded_customer_data(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'The service customer relationship must be loaded before preparing a domain order.',
+        );
+
+        $this->extension()->prepareDomainOrder(
+            new Service,
+            $this->domainProperties(),
+        );
+    }
+
     public function test_it_exposes_provider_configuration(): void
     {
         $config = $this->extension()->getConfig();
@@ -370,6 +436,64 @@ class AbsoluteHostingDomainsTest extends TestCase
                 ],
             ]),
         ]);
+    }
+
+    private function service(): Service
+    {
+        $customer = new User([
+            'first_name' => 'Test',
+            'last_name' => 'Registrant',
+            'email' => 'registrant@example.test',
+        ]);
+
+        $customer->setRelation(
+            'properties',
+            new Collection([
+                $this->property('phone', ' +27.100000000 '),
+                $this->property('company_name', 'Example Test'),
+                $this->property('country', 'ZA'),
+                $this->property('address', '1 Example Road'),
+                $this->property('address2', ''),
+                $this->property('city', 'Johannesburg'),
+                $this->property('state', 'Gauteng'),
+                $this->property('zip', '2000'),
+            ]),
+        );
+
+        $service = new Service;
+        $service->setRelation('user', $customer);
+
+        return $service;
+    }
+
+    private function domainProperties(): array
+    {
+        return [
+            'domain_action' => 'register',
+            'domain_sld' => 'example',
+            'domain_tld' => '.co.za',
+            'registration_period' => '1',
+            'nameserver_1' => 'ns1.example.test',
+            'nameserver_2' => 'ns2.example.test',
+            'nameserver_3' => '',
+            'nameserver_4' => '',
+            'nameserver_5' => '',
+            'epp_code' => '',
+        ];
+    }
+
+    private function property(
+        string $key,
+        mixed $value,
+    ): stdClass {
+        $definition = new stdClass;
+        $definition->key = $key;
+
+        $property = new stdClass;
+        $property->value = $value;
+        $property->parent_property = $definition;
+
+        return $property;
     }
 
     private function extension(): AbsoluteHostingDomains

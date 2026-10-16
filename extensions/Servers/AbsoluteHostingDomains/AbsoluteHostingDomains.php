@@ -5,10 +5,13 @@ namespace Paymenter\Extensions\Servers\AbsoluteHostingDomains;
 use App\Attributes\ExtensionMeta;
 use App\Classes\Extension\Server;
 use App\Models\Product;
+use App\Models\Service;
 use Closure;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingClient;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingException;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\CustomerPropertyExtractor;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainCatalogService;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderContextFactory;
 
 #[ExtensionMeta(
     name: 'Absolute Hosting Domains',
@@ -181,6 +184,23 @@ class AbsoluteHostingDomains extends Server
                     : 'nullable|string|max:255',
             ],
         ];
+    }
+
+    public function prepareDomainOrder(
+        Service $service,
+        array $properties,
+    ): array {
+        return $this->contextFactory()->make(
+            $service,
+            $properties,
+        );
+    }
+
+    public function contextFactory(): DomainOrderContextFactory
+    {
+        return new DomainOrderContextFactory(
+            new CustomerPropertyExtractor,
+        );
     }
 
     public function client(): AbsoluteHostingClient
