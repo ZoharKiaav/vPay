@@ -143,6 +143,157 @@ class AbsoluteHostingClientTest extends TestCase
         $this->client()->tlds();
     }
 
+    public function test_it_posts_the_documented_registration_contract(): void
+    {
+        Http::preventStrayRequests();
+
+        Http::fake([
+            self::ENDPOINT . '/order/domains/register' => Http::response([
+                'success' => true,
+                'domain' => 'example.co.za',
+            ]),
+        ]);
+
+        $payload = $this->registrationPayload();
+
+        $result = $this->client()->registerDomain($payload);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('example.co.za', $result['domain']);
+
+        Http::assertSent(function (Request $request) use ($payload): bool {
+            return $request->method() === 'POST'
+                && $request->url()
+                    === self::ENDPOINT . '/order/domains/register'
+                && $request->data() === $payload;
+        });
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_it_posts_the_documented_transfer_contract(): void
+    {
+        Http::preventStrayRequests();
+
+        Http::fake([
+            self::ENDPOINT . '/order/domains/transfer' => Http::response([
+                'success' => true,
+                'domain' => 'example.co.za',
+            ]),
+        ]);
+
+        $payload = $this->transferPayload();
+
+        $result = $this->client()->transferDomain($payload);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('example.co.za', $result['domain']);
+
+        Http::assertSent(function (Request $request) use ($payload): bool {
+            return $request->method() === 'POST'
+                && $request->url()
+                    === self::ENDPOINT . '/order/domains/transfer'
+                && $request->data() === $payload;
+        });
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_registration_and_transfer_use_distinct_endpoints(): void
+    {
+        Http::preventStrayRequests();
+
+        Http::fake([
+            self::ENDPOINT . '/order/domains/register' => Http::response([
+                'operation' => 'register',
+            ]),
+            self::ENDPOINT . '/order/domains/transfer' => Http::response([
+                'operation' => 'transfer',
+            ]),
+        ]);
+
+        $registration = $this->client()->registerDomain(
+            $this->registrationPayload(),
+        );
+
+        $transfer = $this->client()->transferDomain(
+            $this->transferPayload(),
+        );
+
+        $this->assertSame('register', $registration['operation']);
+        $this->assertSame('transfer', $transfer['operation']);
+        Http::assertSentCount(2);
+    }
+
+    private function registrationPayload(): array
+    {
+        return [
+            'domain' => 'example.co.za',
+            'regperiod' => 1,
+            'idnLanguage' => '',
+            'domainfields' => base64_encode(serialize([])),
+            'addons' => [
+                'dnsmanagement' => 0,
+                'emailforwarding' => 0,
+                'idprotection' => 0,
+            ],
+            'nameservers' => [
+                'ns1' => 'ns1.example.test',
+                'ns2' => 'ns2.example.test',
+                'ns3' => '',
+                'ns4' => '',
+                'ns5' => '',
+            ],
+            'contacts' => [
+                'registrant' => $this->registrantContact(),
+            ],
+        ];
+    }
+
+    private function transferPayload(): array
+    {
+        return [
+            'domain' => 'example.co.za',
+            'regperiod' => 1,
+            'idnLanguage' => '',
+            'eppcode' => 'TEST-EPP-CODE',
+            'domainfields' => base64_encode(serialize([])),
+            'addons' => [
+                'dnsmanagement' => 0,
+                'emailforwarding' => 0,
+                'idprotection' => 0,
+            ],
+            'nameservers' => [
+                'ns1.example.test',
+                'ns2.example.test',
+                '',
+                '',
+                '',
+            ],
+            'contacts' => [
+                'registrant' => $this->registrantContact(),
+            ],
+        ];
+    }
+
+    private function registrantContact(): array
+    {
+        return [
+            'firstname' => 'Test',
+            'lastname' => 'Registrant',
+            'companyname' => 'Example Test',
+            'email' => 'registrant@example.test',
+            'address1' => '1 Example Road',
+            'address2' => '',
+            'city' => 'Johannesburg',
+            'state' => 'Gauteng',
+            'postcode' => '2000',
+            'country' => 'ZA',
+            'phonenumber' => '+27.100000000',
+            'tax_id' => '',
+        ];
+    }
+
     private function client(): AbsoluteHostingClient
     {
         return new AbsoluteHostingClient(

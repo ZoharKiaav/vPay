@@ -57,6 +57,16 @@ class AbsoluteHostingClient
         return $this->request('GET', $action, $query);
     }
 
+    public function registerDomain(array $payload): mixed
+    {
+        return $this->post('/order/domains/register', $payload);
+    }
+
+    public function transferDomain(array $payload): mixed
+    {
+        return $this->post('/order/domains/transfer', $payload);
+    }
+
     public function post(string $action, array $form = []): mixed
     {
         return $this->request('POST', $action, $form);
