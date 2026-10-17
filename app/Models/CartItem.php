@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Classes\Price;
+use App\Helpers\ExtensionHelper;
 use App\Observers\CartItemObserver;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -86,6 +87,11 @@ class CartItem extends Model
                         $setup_fee += $childPrice->setup_fee;
                     }
                 });
+
+                $total += ExtensionHelper::getCheckoutPrice(
+                    $this->product,
+                    (array) $this->checkout_config,
+                );
 
                 // A paid option without a price row must make the whole item unavailable, not contribute 0.
                 if ($unavailable) {

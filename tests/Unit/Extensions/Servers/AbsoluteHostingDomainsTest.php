@@ -88,6 +88,39 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertTrue($config[2]['encrypted']);
     }
 
+    public function test_it_exposes_domain_product_configuration(): void
+    {
+        $config = $this->extension()->getProductConfig();
+
+        $this->assertSame([
+            'markup_percentage',
+            'markup_fixed',
+            'default_nameserver_1',
+            'default_nameserver_2',
+            'registration_enabled',
+            'transfer_enabled',
+        ], array_column($config, 'name'));
+    }
+
+    public function test_it_calculates_retail_checkout_price(): void
+    {
+        $this->fakePricing();
+
+        $price = $this->extension()->checkoutPrice(
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+                'registration_period' => '2',
+            ],
+            [
+                'markup_percentage' => '25',
+                'markup_fixed' => '5',
+            ],
+        );
+
+        $this->assertSame(242.50, $price);
+    }
+
     public function test_it_builds_domain_checkout_configuration(): void
     {
         $this->fakePricing();
@@ -138,6 +171,37 @@ class AbsoluteHostingDomainsTest extends TestCase
         );
 
         $this->assertSame('2', $config[3]['default']);
+    }
+
+    public function test_it_uses_retail_prices_and_default_nameservers(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [],
+            [
+                'markup_percentage' => '25',
+                'markup_fixed' => '5',
+                'default_nameserver_1' => 'red.proniit.com',
+                'default_nameserver_2' => 'yellow.proniit.com',
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertSame(
+            '.co.za (ZAR 121.25)',
+            $configByName['domain_tld']['options']['.co.za'],
+        );
+        $this->assertSame(
+            'red.proniit.com',
+            $configByName['nameserver_1']['default'],
+        );
+        $this->assertSame(
+            'yellow.proniit.com',
+            $configByName['nameserver_2']['default'],
+        );
     }
 
     public function test_it_exposes_nameserver_fields_for_registration(): void

@@ -123,6 +123,11 @@ class Checkout extends Component
             $setup_fee += $option->children->where('id', $this->configOptions[$option->id])->first()?->price(billing_period: $this->plan->billing_period, billing_unit: $this->plan->billing_unit)->setup_fee;
         });
 
+        $total += ExtensionHelper::getCheckoutPrice(
+            $this->product,
+            (array) $this->checkoutConfig,
+        );
+
         $this->total = new Price([
             'price' => $total,
             'currency' => $this->plan->price()->currency,
@@ -139,6 +144,11 @@ class Checkout extends Component
 
     // On change of the config options, update the pricing
     public function updatedConfigOptions()
+    {
+        $this->updatePricing();
+    }
+
+    public function updatedCheckoutConfig()
     {
         $this->updatePricing();
     }

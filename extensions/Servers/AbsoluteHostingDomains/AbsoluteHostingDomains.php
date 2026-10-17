@@ -15,6 +15,7 @@ use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainCatalogSer
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderContextFactory;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderPayloadFactory;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderService;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainRetailPriceService;
 
 #[ExtensionMeta(
     name: 'Absolute Hosting Domains',
@@ -68,6 +69,58 @@ class AbsoluteHostingDomains extends Server
         }
     }
 
+    public function getProductConfig($values = []): array
+    {
+        return [
+            [
+                'name' => 'markup_percentage',
+                'type' => 'number',
+                'label' => 'Domain markup percentage',
+                'default' => 0,
+                'required' => true,
+                'min_value' => 0,
+                'description' => 'Percentage added to the provider price.',
+            ],
+            [
+                'name' => 'markup_fixed',
+                'type' => 'number',
+                'label' => 'Fixed domain markup',
+                'default' => 0,
+                'required' => true,
+                'min_value' => 0,
+                'description' => 'Fixed amount added per registration year.',
+            ],
+            [
+                'name' => 'default_nameserver_1',
+                'type' => 'text',
+                'label' => 'Default primary nameserver',
+                'default' => 'red.proniit.com',
+                'required' => true,
+            ],
+            [
+                'name' => 'default_nameserver_2',
+                'type' => 'text',
+                'label' => 'Default secondary nameserver',
+                'default' => 'yellow.proniit.com',
+                'required' => true,
+            ],
+            [
+                'name' => 'registration_enabled',
+                'type' => 'checkbox',
+                'label' => 'Allow domain registration',
+                'default' => true,
+                'required' => false,
+            ],
+            [
+                'name' => 'transfer_enabled',
+                'type' => 'checkbox',
+                'label' => 'Allow domain transfer',
+                'default' => true,
+                'required' => false,
+            ],
+        ];
+    }
+
     public function getCheckoutConfig(
         Product $product,
         array $values = [],
@@ -77,7 +130,7 @@ class AbsoluteHostingDomains extends Server
             (string) ($values['domain_action'] ?? 'register'),
         );
 
-        $tldOptions = $this->tldOptions();
+        $tldOptions = $this->tldOptions($settings);
         $selectedTld = $this->normaliseSelectedTld(
             (string) ($values['domain_tld']
                 ?? array_key_first($tldOptions)
@@ -91,6 +144,16 @@ class AbsoluteHostingDomains extends Server
                 ?? array_key_first($periodOptions)
                 ?? '1'
         );
+
+        $defaultNameserver1 = trim((string) (
+            $settings['default_nameserver_1']
+                ?? 'red.proniit.com'
+        ));
+
+        $defaultNameserver2 = trim((string) (
+            $settings['default_nameserver_2']
+                ?? 'yellow.proniit.com'
+        ));
 
         return [
             [
@@ -144,6 +207,7 @@ class AbsoluteHostingDomains extends Server
                 'required' => true,
                 'placeholder' => 'ns1.example.com',
                 'validation' => $this->nameserverValidation(),
+                'default' => $defaultNameserver1,
             ],
             [
                 'name' => 'nameserver_2',
@@ -152,6 +216,7 @@ class AbsoluteHostingDomains extends Server
                 'required' => true,
                 'placeholder' => 'ns2.example.com',
                 'validation' => $this->nameserverValidation(),
+                'default' => $defaultNameserver2,
             ],
             [
                 'name' => 'nameserver_3',
@@ -253,7 +318,40 @@ class AbsoluteHostingDomains extends Server
         return new DomainCatalogService($this->client());
     }
 
-    private function tldOptions(): array
+    public function checkoutPrice(
+        array $values,
+        array $settings = [],
+    ): float {
+        $action = $this->normaliseAction(
+            (string) ($values['domain_action'] ?? 'register'),
+        );
+
+        $tld = '.' . strtolower(ltrim(
+            trim((string) ($values['domain_tld'] ?? '')),
+            '.',
+        ));
+
+        $period = (string) ($values['registration_period'] ?? '1');
+        $pricing = $this->catalog()->pricingFor($tld);
+
+        if ($pricing === null) {
+            throw new AbsoluteHostingException(
+                "Absolute Hosting returned no pricing for {$tld}.",
+            );
+        }
+
+        $providerPrice = $action === 'transfer'
+            ? $pricing['transfer_price']
+            : $pricing['registration_price'];
+
+        return $this->retailPriceService()->calculate(
+            providerPrice: $providerPrice,
+            period: $period,
+            settings: $settings,
+        );
+    }
+
+    private function tldOptions(array $settings = []): array
     {
         $pricing = $this->catalog()->pricing();
         $options = [];
@@ -263,7 +361,11 @@ class AbsoluteHostingDomains extends Server
                 continue;
             }
 
-            $registrationPrice = $record['registration_price'];
+            $registrationPrice = $this->retailPriceService()->calculate(
+                providerPrice: $record['registration_price'],
+                period: 1,
+                settings: $settings,
+            );
             $currencyCode = $record['currency_code'];
 
             $options[$tld] = sprintf(
@@ -337,7 +439,13 @@ class AbsoluteHostingDomains extends Server
                 return;
             }
 
-            if ($action === 'register' && !$result['is_available']) {
+            if (
+                $action === 'register'
+                && (
+                    $result['is_registered']
+                    || !$result['is_available']
+                )
+            ) {
                 $fail('The selected domain is not available for registration.');
 
                 return;
@@ -347,6 +455,11 @@ class AbsoluteHostingDomains extends Server
                 $fail('The selected domain is not registered and cannot be transferred.');
             }
         };
+    }
+
+    private function retailPriceService(): DomainRetailPriceService
+    {
+        return new DomainRetailPriceService;
     }
 
     private function nameserverValidation(): array

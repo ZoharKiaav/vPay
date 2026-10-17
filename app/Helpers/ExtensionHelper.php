@@ -131,6 +131,24 @@ class ExtensionHelper
     }
 
     /**
+     * Get the authoritative extension-controlled checkout price.
+     */
+    public static function getCheckoutPrice(Product $product, array $values = []): float
+    {
+        $server = $product->server;
+
+        if (!$server || !self::hasFunction($server, 'checkoutPrice')) {
+            return 0.0;
+        }
+
+        return (float) (self::call(
+            $server,
+            'checkoutPrice',
+            [$values, self::settingsToArray($product->settings)],
+        ) ?? 0.0);
+    }
+
+    /**
      * Get all extensions which are not gateways or servers with their settings
      *
      * @return array
