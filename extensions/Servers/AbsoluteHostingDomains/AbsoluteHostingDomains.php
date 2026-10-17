@@ -9,9 +9,12 @@ use App\Models\Service;
 use Closure;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingClient;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingException;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Models\ManagedDomain;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\CustomerPropertyExtractor;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainCatalogService;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderContextFactory;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderPayloadFactory;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderService;
 
 #[ExtensionMeta(
     name: 'Absolute Hosting Domains',
@@ -186,6 +189,31 @@ class AbsoluteHostingDomains extends Server
         ];
     }
 
+    public function createServer(
+        Service $service,
+        $settings,
+        $properties,
+    ): array {
+        $service->loadMissing('user.properties');
+
+        $context = $this->prepareDomainOrder(
+            $service,
+            (array) $properties,
+        );
+
+        $managedDomain = ManagedDomain::query()->firstOrNew([
+            'service_id' => $service->getKey(),
+        ]);
+
+        return $this->orderService()->submit(
+            managedDomain: $managedDomain,
+            action: $context['action'],
+            serviceProperties: $context['service_properties'],
+            customer: $context['customer'],
+            customerProperties: $context['customer_properties'],
+        );
+    }
+
     public function prepareDomainOrder(
         Service $service,
         array $properties,
@@ -200,6 +228,14 @@ class AbsoluteHostingDomains extends Server
     {
         return new DomainOrderContextFactory(
             new CustomerPropertyExtractor,
+        );
+    }
+
+    public function orderService(): DomainOrderService
+    {
+        return new DomainOrderService(
+            $this->client(),
+            new DomainOrderPayloadFactory,
         );
     }
 
