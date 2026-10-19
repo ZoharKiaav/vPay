@@ -513,6 +513,10 @@ class AbsoluteHostingDomains extends Server
         array $values,
         array $settings = [],
     ): float {
+        if (trim((string) ($values['domain_sld'] ?? '')) === '') {
+            return 0.0;
+        }
+
         $values = $this->normaliseDomainValues($values);
 
         $action = $this->normaliseAction(
