@@ -123,6 +123,11 @@ class Checkout extends Component
             $setup_fee += $option->children->where('id', $this->configOptions[$option->id])->first()?->price(billing_period: $this->plan->billing_period, billing_unit: $this->plan->billing_unit)->setup_fee;
         });
 
+        $total += ExtensionHelper::getCheckoutPrice(
+            $this->product,
+            (array) $this->checkoutConfig,
+        );
+
         $this->total = new Price([
             'price' => $total,
             'currency' => $this->plan->price()->currency,
@@ -143,9 +148,71 @@ class Checkout extends Component
         $this->updatePricing();
     }
 
+    public function updatedCheckoutConfig($value, $key)
+    {
+        if ($key === 'use_custom_nameservers' && !$value) {
+            $config = collect($this->getCheckoutConfig())
+                ->keyBy('name');
+
+            $this->checkoutConfig['nameserver_1'] =
+                $config['nameserver_1']['default'] ?? null;
+
+            $this->checkoutConfig['nameserver_2'] =
+                $config['nameserver_2']['default'] ?? null;
+
+            foreach ([
+                'nameserver_3',
+                'nameserver_4',
+                'nameserver_5',
+            ] as $nameserver) {
+                $this->checkoutConfig[$nameserver] = null;
+            }
+        }
+
+        if ($key === 'domain_action' && $value !== 'transfer') {
+            $this->checkoutConfig['epp_code'] = null;
+        }
+
+        if ($key === 'domain_tld') {
+            $periodConfig = collect($this->getCheckoutConfig())
+                ->firstWhere('name', 'registration_period');
+
+            $periodOptions = $periodConfig['options'] ?? [];
+            $selectedPeriod = (string) (
+                $this->checkoutConfig['registration_period'] ?? ''
+            );
+
+            if (!array_key_exists($selectedPeriod, $periodOptions)) {
+                $this->checkoutConfig['registration_period'] =
+                    (string) array_key_first($periodOptions);
+            }
+        }
+
+        $this->synchroniseCheckoutDefaults();
+        $this->updatePricing();
+    }
+
     public function getCheckoutConfig()
     {
-        return once(fn () => ExtensionHelper::getCheckoutConfig($this->product, $this->checkoutConfig));
+        return ExtensionHelper::getCheckoutConfig(
+            $this->product,
+            $this->checkoutConfig,
+        );
+    }
+
+    private function synchroniseCheckoutDefaults(): void
+    {
+        foreach ($this->getCheckoutConfig() as $config) {
+            $name = $config['name'];
+
+            if (
+                !array_key_exists($name, $this->checkoutConfig)
+                || $this->checkoutConfig[$name] === null
+            ) {
+                $this->checkoutConfig[$name] =
+                    $config['default'] ?? null;
+            }
+        }
     }
 
     public function rules()
@@ -273,13 +340,29 @@ class Checkout extends Component
             ];
         });
 
-        // Ensure checkout config has only the allowed keys and values
+        // Ensure checkout config has only the allowed keys and values.
         $checkoutConfig = [];
         foreach ($this->getCheckoutConfig() as $config) {
-            $checkoutConfig[$config['name']] = $this->checkoutConfig[$config['name']] ?? null;
+            $checkoutConfig[$config['name']] =
+                $this->checkoutConfig[$config['name']] ?? null;
         }
 
-        Cart::add($this->product, $this->plan, $configOptions, $checkoutConfig, key: $this->cartProductKey);
+        // Canonicalise and revalidate extension-controlled values at the
+        // final boundary before they are persisted to the cart.
+        $checkoutConfig = ExtensionHelper::prepareCheckoutConfig(
+            $this->product,
+            $checkoutConfig,
+        );
+
+        $this->checkoutConfig = $checkoutConfig;
+
+        Cart::add(
+            $this->product,
+            $this->plan,
+            $configOptions,
+            $checkoutConfig,
+            key: $this->cartProductKey,
+        );
 
         $this->dispatch('cartUpdated');
 

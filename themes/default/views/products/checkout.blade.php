@@ -54,7 +54,8 @@
         @endforeach
         @foreach ($this->getCheckoutConfig() as $configOption)
             @php $configOption = (object) $configOption; @endphp
-            <x-form.configoption :config="$configOption" :name="'checkoutConfig.' . $configOption->name">
+            @if ($configOption->visible ?? true)
+                <x-form.configoption :config="$configOption" :name="'checkoutConfig.' . $configOption->name">
                 @if ($configOption->type == 'select')
                     @foreach ($configOption->options as $configOptionValue => $configOptionValueName)
                         <option value="{{ $configOptionValue }}">
@@ -73,7 +74,8 @@
                         </div>
                     @endforeach
                 @endif
-            </x-form.configoption>
+                </x-form.configoption>
+            @endif
         @endforeach
     </div>
     <div class="flex flex-col gap-2 w-full col-span-1 bg-background-secondary p-3 rounded-md h-fit">

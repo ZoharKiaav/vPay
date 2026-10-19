@@ -88,6 +88,40 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertTrue($config[2]['encrypted']);
     }
 
+    public function test_it_exposes_domain_product_configuration(): void
+    {
+        $config = $this->extension()->getProductConfig();
+
+        $this->assertSame([
+            'markup_percentage',
+            'markup_fixed',
+            'default_nameserver_1',
+            'default_nameserver_2',
+            'registration_enabled',
+            'transfer_enabled',
+            'allow_custom_nameservers',
+        ], array_column($config, 'name'));
+    }
+
+    public function test_it_calculates_retail_checkout_price(): void
+    {
+        $this->fakePricing();
+
+        $price = $this->extension()->checkoutPrice(
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+                'registration_period' => '2',
+            ],
+            [
+                'markup_percentage' => '25',
+                'markup_fixed' => '5',
+            ],
+        );
+
+        $this->assertSame(242.50, $price);
+    }
+
     public function test_it_builds_domain_checkout_configuration(): void
     {
         $this->fakePricing();
@@ -107,6 +141,7 @@ class AbsoluteHostingDomainsTest extends TestCase
                 'domain_sld',
                 'domain_tld',
                 'registration_period',
+                'use_custom_nameservers',
                 'nameserver_1',
                 'nameserver_2',
                 'nameserver_3',
@@ -140,6 +175,37 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertSame('2', $config[3]['default']);
     }
 
+    public function test_it_uses_retail_prices_and_default_nameservers(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [],
+            [
+                'markup_percentage' => '25',
+                'markup_fixed' => '5',
+                'default_nameserver_1' => 'red.proniit.com',
+                'default_nameserver_2' => 'yellow.proniit.com',
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertSame(
+            '.co.za (ZAR 121.25)',
+            $configByName['domain_tld']['options']['.co.za'],
+        );
+        $this->assertSame(
+            'red.proniit.com',
+            $configByName['nameserver_1']['default'],
+        );
+        $this->assertSame(
+            'yellow.proniit.com',
+            $configByName['nameserver_2']['default'],
+        );
+    }
+
     public function test_it_exposes_nameserver_fields_for_registration(): void
     {
         $this->fakePricing();
@@ -166,6 +232,128 @@ class AbsoluteHostingDomainsTest extends TestCase
         );
     }
 
+    public function test_it_hides_default_nameservers_until_custom_nameservers_are_selected(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+            [
+                'default_nameserver_1' => 'red.proniit.com',
+                'default_nameserver_2' => 'yellow.proniit.com',
+                'allow_custom_nameservers' => true,
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertTrue(
+            $configByName['use_custom_nameservers']['visible'],
+        );
+        $this->assertFalse(
+            $configByName['nameserver_1']['visible'],
+        );
+        $this->assertFalse(
+            $configByName['nameserver_2']['visible'],
+        );
+        $this->assertSame(
+            'red.proniit.com',
+            $configByName['nameserver_1']['default'],
+        );
+        $this->assertSame(
+            'yellow.proniit.com',
+            $configByName['nameserver_2']['default'],
+        );
+        $this->assertFalse(
+            $configByName['epp_code']['visible'],
+        );
+    }
+
+    public function test_it_exposes_custom_nameservers_when_selected(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+                'use_custom_nameservers' => true,
+                'nameserver_1' => 'ns1.customer.test',
+                'nameserver_2' => 'ns2.customer.test',
+            ],
+            [
+                'allow_custom_nameservers' => true,
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertTrue(
+            $configByName['nameserver_1']['visible'],
+        );
+        $this->assertTrue(
+            $configByName['nameserver_2']['visible'],
+        );
+        $this->assertTrue(
+            $configByName['nameserver_3']['visible'],
+        );
+        $this->assertSame(
+            'ns1.customer.test',
+            $configByName['nameserver_1']['default'],
+        );
+        $this->assertSame(
+            'ns2.customer.test',
+            $configByName['nameserver_2']['default'],
+        );
+    }
+
+    public function test_it_respects_enabled_domain_actions(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+            [
+                'registration_enabled' => false,
+                'transfer_enabled' => true,
+            ],
+        );
+
+        $this->assertSame('transfer', $config[0]['default']);
+        $this->assertSame(
+            ['transfer'],
+            array_keys($config[0]['options']),
+        );
+    }
+
+    public function test_it_rejects_products_with_all_actions_disabled(): void
+    {
+        $this->fakePricing();
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'Domain registration and transfer are both disabled for this product.',
+        );
+
+        $this->extension()->getCheckoutConfig(
+            new Product,
+            [],
+            [
+                'registration_enabled' => false,
+                'transfer_enabled' => false,
+            ],
+        );
+    }
+
     public function test_it_requires_an_epp_code_for_transfers(): void
     {
         $this->fakePricing();
@@ -181,6 +369,7 @@ class AbsoluteHostingDomainsTest extends TestCase
         $configByName = collect($config)->keyBy('name');
 
         $this->assertTrue($configByName['epp_code']['required']);
+        $this->assertTrue($configByName['epp_code']['visible']);
         $this->assertSame(
             'required|string|max:255',
             $configByName['epp_code']['validation'],
@@ -353,6 +542,160 @@ class AbsoluteHostingDomainsTest extends TestCase
                 'The selected domain is not registered and cannot be transferred.',
             ],
             $messages,
+        );
+    }
+
+    public function test_it_normalises_a_full_domain_before_ordering(): void
+    {
+        $this->fakePricing();
+
+        $properties = $this->domainProperties();
+        $properties['domain_sld'] = ' HTTPS://WWW.EXAMPLE.CO.ZA/path ';
+        $properties['domain_tld'] = '.co.za';
+
+        $context = $this->extension()->prepareDomainOrder(
+            $this->service(),
+            $properties,
+        );
+
+        $this->assertSame(
+            'example',
+            $context['service_properties']['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $context['service_properties']['domain_tld'],
+        );
+    }
+
+    public function test_it_uses_the_tld_from_full_domain_input(): void
+    {
+        $this->fakePricing();
+
+        $values = $this->extension()->normaliseDomainValues([
+            'domain_sld' => 'example.co.za',
+            'domain_tld' => '.za',
+        ]);
+
+        $this->assertSame('example', $values['domain_sld']);
+        $this->assertSame('.co.za', $values['domain_tld']);
+    }
+
+    public function test_registration_rule_accepts_a_full_domain(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: false,
+            isAvailable: true,
+        );
+
+        $rule = $this->domainRule(
+            action: 'register',
+        );
+
+        $messages = [];
+        $rule(
+            'checkoutConfig.domain_sld',
+            'https://www.vkloud-example.co.za/path',
+            function (string $message) use (&$messages): void {
+                $messages[] = $message;
+            },
+        );
+
+        $this->assertSame([], $messages);
+    }
+
+    public function test_it_prepares_canonical_registration_values_for_cart(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: false,
+            isAvailable: true,
+        );
+
+        $values = $this->domainProperties();
+        $values['domain_sld'] =
+            'https://www.example.co.za/path';
+        $values['domain_tld'] = '.za';
+        $values['use_custom_nameservers'] = false;
+        $values['epp_code'] = 'SHOULD-BE-CLEARED';
+
+        $prepared = $this->extension()
+            ->prepareCheckoutConfigForCart(
+                $values,
+                [
+                    'default_nameserver_1' => 'red.proniit.com',
+                    'default_nameserver_2' => 'yellow.proniit.com',
+                    'allow_custom_nameservers' => true,
+                ],
+            );
+
+        $this->assertSame('example', $prepared['domain_sld']);
+        $this->assertSame('.co.za', $prepared['domain_tld']);
+        $this->assertSame(
+            'red.proniit.com',
+            $prepared['nameserver_1'],
+        );
+        $this->assertSame(
+            'yellow.proniit.com',
+            $prepared['nameserver_2'],
+        );
+        $this->assertSame('', $prepared['nameserver_3']);
+        $this->assertSame('', $prepared['epp_code']);
+    }
+
+    public function test_it_preserves_selected_custom_nameservers_for_cart(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: false,
+            isAvailable: true,
+        );
+
+        $values = $this->domainProperties();
+        $values['use_custom_nameservers'] = true;
+        $values['nameserver_1'] = ' NS1.CUSTOMER.TEST. ';
+        $values['nameserver_2'] = ' NS2.CUSTOMER.TEST. ';
+
+        $prepared = $this->extension()
+            ->prepareCheckoutConfigForCart(
+                $values,
+                [
+                    'allow_custom_nameservers' => true,
+                ],
+            );
+
+        $this->assertTrue(
+            $prepared['use_custom_nameservers'],
+        );
+        $this->assertSame(
+            'NS1.CUSTOMER.TEST.',
+            $prepared['nameserver_1'],
+        );
+        $this->assertSame(
+            'NS2.CUSTOMER.TEST.',
+            $prepared['nameserver_2'],
+        );
+    }
+
+    public function test_it_revalidates_availability_before_cart_persistence(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: true,
+            isAvailable: false,
+        );
+
+        $this->expectException(
+            \InvalidArgumentException::class,
+        );
+
+        $this->expectExceptionMessage(
+            'The selected domain is not available for registration.',
+        );
+
+        $this->extension()->prepareCheckoutConfigForCart(
+            $this->domainProperties(),
         );
     }
 
