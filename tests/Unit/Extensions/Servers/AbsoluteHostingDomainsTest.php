@@ -605,6 +605,100 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertSame([], $messages);
     }
 
+    public function test_it_prepares_canonical_registration_values_for_cart(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: false,
+            isAvailable: true,
+        );
+
+        $values = $this->domainProperties();
+        $values['domain_sld'] =
+            'https://www.example.co.za/path';
+        $values['domain_tld'] = '.za';
+        $values['use_custom_nameservers'] = false;
+        $values['epp_code'] = 'SHOULD-BE-CLEARED';
+
+        $prepared = $this->extension()
+            ->prepareCheckoutConfigForCart(
+                $values,
+                [
+                    'default_nameserver_1' => 'red.proniit.com',
+                    'default_nameserver_2' => 'yellow.proniit.com',
+                    'allow_custom_nameservers' => true,
+                ],
+            );
+
+        $this->assertSame('example', $prepared['domain_sld']);
+        $this->assertSame('.co.za', $prepared['domain_tld']);
+        $this->assertSame(
+            'red.proniit.com',
+            $prepared['nameserver_1'],
+        );
+        $this->assertSame(
+            'yellow.proniit.com',
+            $prepared['nameserver_2'],
+        );
+        $this->assertSame('', $prepared['nameserver_3']);
+        $this->assertSame('', $prepared['epp_code']);
+    }
+
+    public function test_it_preserves_selected_custom_nameservers_for_cart(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: false,
+            isAvailable: true,
+        );
+
+        $values = $this->domainProperties();
+        $values['use_custom_nameservers'] = true;
+        $values['nameserver_1'] = ' NS1.CUSTOMER.TEST. ';
+        $values['nameserver_2'] = ' NS2.CUSTOMER.TEST. ';
+
+        $prepared = $this->extension()
+            ->prepareCheckoutConfigForCart(
+                $values,
+                [
+                    'allow_custom_nameservers' => true,
+                ],
+            );
+
+        $this->assertTrue(
+            $prepared['use_custom_nameservers'],
+        );
+        $this->assertSame(
+            'NS1.CUSTOMER.TEST.',
+            $prepared['nameserver_1'],
+        );
+        $this->assertSame(
+            'NS2.CUSTOMER.TEST.',
+            $prepared['nameserver_2'],
+        );
+    }
+
+    public function test_it_revalidates_availability_before_cart_persistence(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: true,
+            isAvailable: false,
+        );
+
+        $this->expectException(
+            \InvalidArgumentException::class,
+        );
+
+        $this->expectExceptionMessage(
+            'The selected domain is not available for registration.',
+        );
+
+        $this->extension()->prepareCheckoutConfigForCart(
+            $this->domainProperties(),
+        );
+    }
+
     private function domainRule(string $action): \Closure
     {
         $config = $this->extension()->getCheckoutConfig(

@@ -149,6 +149,36 @@ class ExtensionHelper
     }
 
     /**
+     * Prepare extension-controlled checkout values immediately before
+     * adding the item to the cart.
+     */
+    public static function prepareCheckoutConfig(
+        Product $product,
+        array $values,
+    ): array {
+        $server = $product->server;
+
+        if (
+            !$server
+            || !self::hasFunction(
+                $server,
+                'prepareCheckoutConfigForCart',
+            )
+        ) {
+            return $values;
+        }
+
+        return (array) self::call(
+            $server,
+            'prepareCheckoutConfigForCart',
+            [
+                $values,
+                self::settingsToArray($product->settings),
+            ],
+        );
+    }
+
+    /**
      * Get all extensions which are not gateways or servers with their settings
      *
      * @return array

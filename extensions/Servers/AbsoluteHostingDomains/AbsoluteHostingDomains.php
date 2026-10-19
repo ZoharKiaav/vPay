@@ -383,6 +383,103 @@ class AbsoluteHostingDomains extends Server
         return $values;
     }
 
+    public function prepareCheckoutConfigForCart(
+        array $values,
+        array $settings = [],
+    ): array {
+        $values = $this->normaliseDomainValues($values);
+
+        $allowedActions = [];
+
+        if ($this->settingEnabled(
+            $settings,
+            'registration_enabled',
+            true,
+        )) {
+            $allowedActions[] = 'register';
+        }
+
+        if ($this->settingEnabled(
+            $settings,
+            'transfer_enabled',
+            true,
+        )) {
+            $allowedActions[] = 'transfer';
+        }
+
+        if ($allowedActions === []) {
+            throw new \LogicException(
+                'Domain registration and transfer are both disabled for this product.',
+            );
+        }
+
+        $action = $this->normaliseAction(
+            (string) ($values['domain_action'] ?? ''),
+            $allowedActions,
+        );
+
+        $values['domain_action'] = $action;
+
+        $useCustomNameservers = $this->settingEnabled(
+            $settings,
+            'allow_custom_nameservers',
+            false,
+        ) && filter_var(
+            $values['use_custom_nameservers'] ?? false,
+            FILTER_VALIDATE_BOOL,
+        );
+
+        $values['use_custom_nameservers'] = $useCustomNameservers;
+
+        if (!$useCustomNameservers) {
+            $values['nameserver_1'] = trim((string) (
+                $settings['default_nameserver_1']
+                    ?? 'red.proniit.com'
+            ));
+
+            $values['nameserver_2'] = trim((string) (
+                $settings['default_nameserver_2']
+                    ?? 'yellow.proniit.com'
+            ));
+
+            foreach ([
+                'nameserver_3',
+                'nameserver_4',
+                'nameserver_5',
+            ] as $nameserver) {
+                $values[$nameserver] = '';
+            }
+        } else {
+            foreach ([
+                'nameserver_1',
+                'nameserver_2',
+                'nameserver_3',
+                'nameserver_4',
+                'nameserver_5',
+            ] as $nameserver) {
+                $values[$nameserver] = trim((string) (
+                    $values[$nameserver] ?? ''
+                ));
+            }
+        }
+
+        if ($action !== 'transfer') {
+            $values['epp_code'] = '';
+        } else {
+            $values['epp_code'] = trim((string) (
+                $values['epp_code'] ?? ''
+            ));
+        }
+
+        $this->assertDomainEligible(
+            $action,
+            (string) ($values['domain_sld'] ?? ''),
+            (string) ($values['domain_tld'] ?? ''),
+        );
+
+        return $values;
+    }
+
     public function contextFactory(): DomainOrderContextFactory
     {
         return new DomainOrderContextFactory(
@@ -523,42 +620,57 @@ class AbsoluteHostingDomains extends Server
                     $tld,
                 );
 
-                $results = $this->catalog()->availability(
+                $this->assertDomainEligible(
+                    $action,
                     $normalised['sld'],
-                    [$normalised['tld']],
+                    $normalised['tld'],
                 );
             } catch (
                 AbsoluteHostingException|\InvalidArgumentException $exception
             ) {
                 $fail($exception->getMessage());
-
-                return;
-            }
-
-            $result = $results[0] ?? null;
-
-            if ($result === null || !$result['is_valid']) {
-                $fail('The selected domain name is invalid.');
-
-                return;
-            }
-
-            if (
-                $action === 'register'
-                && (
-                    $result['is_registered']
-                    || !$result['is_available']
-                )
-            ) {
-                $fail('The selected domain is not available for registration.');
-
-                return;
-            }
-
-            if ($action === 'transfer' && !$result['is_registered']) {
-                $fail('The selected domain is not registered and cannot be transferred.');
             }
         };
+    }
+
+    private function assertDomainEligible(
+        string $action,
+        string $sld,
+        string $tld,
+    ): void {
+        $results = $this->catalog()->availability(
+            $sld,
+            [$tld],
+        );
+
+        $result = $results[0] ?? null;
+
+        if ($result === null || !$result['is_valid']) {
+            throw new \InvalidArgumentException(
+                'The selected domain name is invalid.',
+            );
+        }
+
+        if (
+            $action === 'register'
+            && (
+                $result['is_registered']
+                || !$result['is_available']
+            )
+        ) {
+            throw new \InvalidArgumentException(
+                'The selected domain is not available for registration.',
+            );
+        }
+
+        if (
+            $action === 'transfer'
+            && !$result['is_registered']
+        ) {
+            throw new \InvalidArgumentException(
+                'The selected domain is not registered and cannot be transferred.',
+            );
+        }
     }
 
     private function domainNameNormalizer(): DomainNameNormalizer

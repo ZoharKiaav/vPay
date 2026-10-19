@@ -340,13 +340,29 @@ class Checkout extends Component
             ];
         });
 
-        // Ensure checkout config has only the allowed keys and values
+        // Ensure checkout config has only the allowed keys and values.
         $checkoutConfig = [];
         foreach ($this->getCheckoutConfig() as $config) {
-            $checkoutConfig[$config['name']] = $this->checkoutConfig[$config['name']] ?? null;
+            $checkoutConfig[$config['name']] =
+                $this->checkoutConfig[$config['name']] ?? null;
         }
 
-        Cart::add($this->product, $this->plan, $configOptions, $checkoutConfig, key: $this->cartProductKey);
+        // Canonicalise and revalidate extension-controlled values at the
+        // final boundary before they are persisted to the cart.
+        $checkoutConfig = ExtensionHelper::prepareCheckoutConfig(
+            $this->product,
+            $checkoutConfig,
+        );
+
+        $this->checkoutConfig = $checkoutConfig;
+
+        Cart::add(
+            $this->product,
+            $this->plan,
+            $configOptions,
+            $checkoutConfig,
+            key: $this->cartProductKey,
+        );
 
         $this->dispatch('cartUpdated');
 
