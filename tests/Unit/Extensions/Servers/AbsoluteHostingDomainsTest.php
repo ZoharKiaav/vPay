@@ -99,6 +99,7 @@ class AbsoluteHostingDomainsTest extends TestCase
             'default_nameserver_2',
             'registration_enabled',
             'transfer_enabled',
+            'allow_custom_nameservers',
         ], array_column($config, 'name'));
     }
 
@@ -140,6 +141,7 @@ class AbsoluteHostingDomainsTest extends TestCase
                 'domain_sld',
                 'domain_tld',
                 'registration_period',
+                'use_custom_nameservers',
                 'nameserver_1',
                 'nameserver_2',
                 'nameserver_3',
@@ -230,6 +232,128 @@ class AbsoluteHostingDomainsTest extends TestCase
         );
     }
 
+    public function test_it_hides_default_nameservers_until_custom_nameservers_are_selected(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+            [
+                'default_nameserver_1' => 'red.proniit.com',
+                'default_nameserver_2' => 'yellow.proniit.com',
+                'allow_custom_nameservers' => true,
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertTrue(
+            $configByName['use_custom_nameservers']['visible'],
+        );
+        $this->assertFalse(
+            $configByName['nameserver_1']['visible'],
+        );
+        $this->assertFalse(
+            $configByName['nameserver_2']['visible'],
+        );
+        $this->assertSame(
+            'red.proniit.com',
+            $configByName['nameserver_1']['default'],
+        );
+        $this->assertSame(
+            'yellow.proniit.com',
+            $configByName['nameserver_2']['default'],
+        );
+        $this->assertFalse(
+            $configByName['epp_code']['visible'],
+        );
+    }
+
+    public function test_it_exposes_custom_nameservers_when_selected(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+                'use_custom_nameservers' => true,
+                'nameserver_1' => 'ns1.customer.test',
+                'nameserver_2' => 'ns2.customer.test',
+            ],
+            [
+                'allow_custom_nameservers' => true,
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $this->assertTrue(
+            $configByName['nameserver_1']['visible'],
+        );
+        $this->assertTrue(
+            $configByName['nameserver_2']['visible'],
+        );
+        $this->assertTrue(
+            $configByName['nameserver_3']['visible'],
+        );
+        $this->assertSame(
+            'ns1.customer.test',
+            $configByName['nameserver_1']['default'],
+        );
+        $this->assertSame(
+            'ns2.customer.test',
+            $configByName['nameserver_2']['default'],
+        );
+    }
+
+    public function test_it_respects_enabled_domain_actions(): void
+    {
+        $this->fakePricing();
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+            [
+                'registration_enabled' => false,
+                'transfer_enabled' => true,
+            ],
+        );
+
+        $this->assertSame('transfer', $config[0]['default']);
+        $this->assertSame(
+            ['transfer'],
+            array_keys($config[0]['options']),
+        );
+    }
+
+    public function test_it_rejects_products_with_all_actions_disabled(): void
+    {
+        $this->fakePricing();
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage(
+            'Domain registration and transfer are both disabled for this product.',
+        );
+
+        $this->extension()->getCheckoutConfig(
+            new Product,
+            [],
+            [
+                'registration_enabled' => false,
+                'transfer_enabled' => false,
+            ],
+        );
+    }
+
     public function test_it_requires_an_epp_code_for_transfers(): void
     {
         $this->fakePricing();
@@ -245,6 +369,7 @@ class AbsoluteHostingDomainsTest extends TestCase
         $configByName = collect($config)->keyBy('name');
 
         $this->assertTrue($configByName['epp_code']['required']);
+        $this->assertTrue($configByName['epp_code']['visible']);
         $this->assertSame(
             'required|string|max:255',
             $configByName['epp_code']['validation'],
