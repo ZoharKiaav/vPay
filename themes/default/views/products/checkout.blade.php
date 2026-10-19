@@ -55,6 +55,28 @@
         @foreach ($this->getCheckoutConfig() as $configOption)
             @php $configOption = (object) $configOption; @endphp
             @if ($configOption->visible ?? true)
+                @if ($configOption->name === 'use_custom_nameservers')
+                    <div class="mt-3 border-t border-neutral pt-4">
+                        <h2 class="text-lg font-semibold text-primary-100">
+                            DNS settings
+                        </h2>
+                        <p class="mt-1 text-sm text-primary-100/75">
+                            Keep the default vKloud nameservers, or choose custom nameservers for this domain.
+                        </p>
+                    </div>
+                @endif
+
+                @if ($configOption->name === 'epp_code')
+                    <div class="mt-3 border-t border-neutral pt-4">
+                        <h2 class="text-lg font-semibold text-primary-100">
+                            Transfer authorisation
+                        </h2>
+                        <p class="mt-1 text-sm text-primary-100/75">
+                            Enter the EPP or transfer code supplied by the current registrar.
+                        </p>
+                    </div>
+                @endif
+
                 <x-form.configoption :config="$configOption" :name="'checkoutConfig.' . $configOption->name">
                 @if ($configOption->type == 'select')
                     @foreach ($configOption->options as $configOptionValue => $configOptionValueName)
@@ -75,6 +97,62 @@
                     @endforeach
                 @endif
                 </x-form.configoption>
+
+                @if ($configOption->name === 'domain_action')
+                    <div class="mt-1 text-sm text-primary-100/75">
+                        @if (($checkoutConfig['domain_action'] ?? 'register') === 'transfer')
+                            Transfer a domain that is already registered. You will need the domain's EPP or transfer code.
+                        @else
+                            Register a new domain that is currently available.
+                        @endif
+                    </div>
+                @endif
+
+                @if ($configOption->name === 'domain_sld')
+                    <div class="mt-1 text-sm text-primary-100/75">
+                        Enter either a name such as
+                        <span class="font-medium text-primary-100">example</span>
+                        or a complete domain such as
+                        <span class="font-medium text-primary-100">example.co.za</span>.
+                    </div>
+
+                    @php
+                        $domainInput = trim((string) ($checkoutConfig['domain_sld'] ?? ''));
+                        $domainTld = trim((string) ($checkoutConfig['domain_tld'] ?? ''));
+                        $domainInputWithoutDot = rtrim(strtolower($domainInput), '.');
+                        $tldWithoutDot = ltrim(strtolower($domainTld), '.');
+
+                        $canonicalDomain = $domainInputWithoutDot;
+
+                        if (
+                            $canonicalDomain !== ''
+                            && $tldWithoutDot !== ''
+                            && !str_ends_with(
+                                $canonicalDomain,
+                                '.' . $tldWithoutDot,
+                            )
+                        ) {
+                            $canonicalDomain .= '.' . $tldWithoutDot;
+                        }
+                    @endphp
+
+                    @if ($canonicalDomain !== '')
+                        <div class="mt-2 rounded-md border border-neutral bg-background-secondary px-3 py-2">
+                            <div class="text-xs uppercase tracking-wide text-primary-100/60">
+                                Selected domain
+                            </div>
+                            <div class="font-semibold text-primary-100">
+                                {{ $canonicalDomain }}
+                            </div>
+                        </div>
+                    @endif
+                @endif
+
+                @error('checkoutConfig.' . $configOption->name)
+                    <div class="mt-1 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+                        {{ $message }}
+                    </div>
+                @enderror
             @endif
         @endforeach
     </div>
@@ -100,11 +178,28 @@
             </div>
         @endif
         @if (($product->stock > 0 || !$product->stock) && $product->price()->available)
+            <div
+                wire:loading
+                wire:target="checkout"
+                class="rounded-md border border-secondary/40 bg-secondary/10 px-3 py-2 text-sm text-primary-100"
+            >
+                <div class="font-semibold">
+                    Checking domain availability…
+                </div>
+                <div class="mt-1 text-primary-100/75">
+                    Confirming the selected domain and preparing the final cart price.
+                </div>
+            </div>
+
             <div>
                 <x-button.primary wire:click="checkout" wire:loading.attr="disabled">
                     <x-loading target="checkout" />
                     <div wire:loading.remove wire:target="checkout">
-                        {{ __('product.checkout') }}
+                        @if (($checkoutConfig['domain_action'] ?? 'register') === 'transfer')
+                            Continue with domain transfer
+                        @else
+                            Check availability and continue
+                        @endif
                     </div>
                 </x-button.primary>
             </div>
