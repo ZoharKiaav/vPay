@@ -215,6 +215,31 @@ class Checkout extends Component
         }
     }
 
+    private function normaliseCheckoutCheckboxes(): void
+    {
+        foreach ($this->getCheckoutConfig() as $config) {
+            if (($config['type'] ?? null) !== 'checkbox') {
+                continue;
+            }
+
+            $name = $config['name'];
+
+            if (!array_key_exists($name, $this->checkoutConfig)) {
+                continue;
+            }
+
+            $normalised = filter_var(
+                $this->checkoutConfig[$name],
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE,
+            );
+
+            if ($normalised !== null) {
+                $this->checkoutConfig[$name] = $normalised;
+            }
+        }
+    }
+
     public function rules()
     {
         $availablePlanIds = $this->product->availablePlans()->pluck('id')->toArray();
@@ -289,6 +314,9 @@ class Checkout extends Component
 
     public function checkout()
     {
+        // Normalise recognised checkbox representations before validation.
+        $this->normaliseCheckoutCheckboxes();
+
         // Do the checkout
         // First we validate the plans
         $this->validate(attributes: $this->attributes());
