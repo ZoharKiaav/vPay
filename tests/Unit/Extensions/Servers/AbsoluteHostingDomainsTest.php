@@ -103,6 +103,21 @@ class AbsoluteHostingDomainsTest extends TestCase
         ], array_column($config, 'name'));
     }
 
+    public function test_it_returns_zero_checkout_price_until_a_domain_is_entered(): void
+    {
+        $price = $this->extension()->checkoutPrice(
+            [
+                'domain_action' => 'register',
+                'domain_sld' => '',
+                'domain_tld' => '.co.za',
+                'registration_period' => '1',
+            ],
+        );
+
+        $this->assertSame(0.0, $price);
+        Http::assertNothingSent();
+    }
+
     public function test_it_calculates_retail_checkout_price(): void
     {
         $this->fakePricing();
@@ -110,6 +125,7 @@ class AbsoluteHostingDomainsTest extends TestCase
         $price = $this->extension()->checkoutPrice(
             [
                 'domain_action' => 'register',
+                'domain_sld' => 'example',
                 'domain_tld' => '.co.za',
                 'registration_period' => '2',
             ],
