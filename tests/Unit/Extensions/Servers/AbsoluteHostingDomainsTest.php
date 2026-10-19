@@ -420,6 +420,66 @@ class AbsoluteHostingDomainsTest extends TestCase
         );
     }
 
+    public function test_it_normalises_a_full_domain_before_ordering(): void
+    {
+        $this->fakePricing();
+
+        $properties = $this->domainProperties();
+        $properties['domain_sld'] = ' HTTPS://WWW.EXAMPLE.CO.ZA/path ';
+        $properties['domain_tld'] = '.co.za';
+
+        $context = $this->extension()->prepareDomainOrder(
+            $this->service(),
+            $properties,
+        );
+
+        $this->assertSame(
+            'example',
+            $context['service_properties']['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $context['service_properties']['domain_tld'],
+        );
+    }
+
+    public function test_it_uses_the_tld_from_full_domain_input(): void
+    {
+        $this->fakePricing();
+
+        $values = $this->extension()->normaliseDomainValues([
+            'domain_sld' => 'example.co.za',
+            'domain_tld' => '.za',
+        ]);
+
+        $this->assertSame('example', $values['domain_sld']);
+        $this->assertSame('.co.za', $values['domain_tld']);
+    }
+
+    public function test_registration_rule_accepts_a_full_domain(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: false,
+            isAvailable: true,
+        );
+
+        $rule = $this->domainRule(
+            action: 'register',
+        );
+
+        $messages = [];
+        $rule(
+            'checkoutConfig.domain_sld',
+            'https://www.vkloud-example.co.za/path',
+            function (string $message) use (&$messages): void {
+                $messages[] = $message;
+            },
+        );
+
+        $this->assertSame([], $messages);
+    }
+
     private function domainRule(string $action): \Closure
     {
         $config = $this->extension()->getCheckoutConfig(

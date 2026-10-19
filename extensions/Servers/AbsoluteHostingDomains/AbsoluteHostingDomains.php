@@ -12,6 +12,7 @@ use Paymenter\Extensions\Others\AbsoluteHostingDomains\Client\AbsoluteHostingExc
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Models\ManagedDomain;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\CustomerPropertyExtractor;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainCatalogService;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainNameNormalizer;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderContextFactory;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderPayloadFactory;
 use Paymenter\Extensions\Others\AbsoluteHostingDomains\Services\DomainOrderService;
@@ -283,10 +284,40 @@ class AbsoluteHostingDomains extends Server
         Service $service,
         array $properties,
     ): array {
+        $properties = $this->normaliseDomainValues($properties);
+
         return $this->contextFactory()->make(
             $service,
             $properties,
         );
+    }
+
+    public function normaliseDomainValues(array $values): array
+    {
+        if (!array_key_exists('domain_sld', $values)) {
+            return $values;
+        }
+
+        $input = trim((string) $values['domain_sld']);
+        $selectedTld = (string) ($values['domain_tld'] ?? '');
+
+        $requiresCatalog = str_contains($input, '.')
+            || str_contains($input, '://');
+
+        $availableTlds = $requiresCatalog
+            ? array_keys($this->catalog()->pricing())
+            : [$selectedTld];
+
+        $normalised = $this->domainNameNormalizer()->normalise(
+            $input,
+            $availableTlds,
+            $selectedTld,
+        );
+
+        $values['domain_sld'] = $normalised['sld'];
+        $values['domain_tld'] = $normalised['tld'];
+
+        return $values;
     }
 
     public function contextFactory(): DomainOrderContextFactory
@@ -322,6 +353,8 @@ class AbsoluteHostingDomains extends Server
         array $values,
         array $settings = [],
     ): float {
+        $values = $this->normaliseDomainValues($values);
+
         $action = $this->normaliseAction(
             (string) ($values['domain_action'] ?? 'register'),
         );
@@ -421,11 +454,19 @@ class AbsoluteHostingDomains extends Server
             Closure $fail,
         ) use ($action, $tld): void {
             try {
-                $results = $this->catalog()->availability(
+                $normalised = $this->domainNameNormalizer()->normalise(
                     (string) $value,
                     [$tld],
+                    $tld,
                 );
-            } catch (AbsoluteHostingException $exception) {
+
+                $results = $this->catalog()->availability(
+                    $normalised['sld'],
+                    [$normalised['tld']],
+                );
+            } catch (
+                AbsoluteHostingException|\InvalidArgumentException $exception
+            ) {
                 $fail($exception->getMessage());
 
                 return;
@@ -455,6 +496,11 @@ class AbsoluteHostingDomains extends Server
                 $fail('The selected domain is not registered and cannot be transferred.');
             }
         };
+    }
+
+    private function domainNameNormalizer(): DomainNameNormalizer
+    {
+        return new DomainNameNormalizer;
     }
 
     private function retailPriceService(): DomainRetailPriceService
