@@ -18,8 +18,16 @@
             <div class="flex flex-row justify-between">
                 <div>
                     <h2 class="text-3xl font-bold">{{ $product->name }}</h2>
+                    @php
+                        $extensionPriceLabel =
+                            \App\Helpers\ExtensionHelper::getCheckoutPriceLabel(
+                                $product,
+                            );
+                    @endphp
+
                     <h3 class="text-xl font-semibold">
-                        {{ $product->price()->formatted->price }}
+                        {{ $extensionPriceLabel
+                            ?? $product->price()->formatted->price }}
                     </h3>
                 </div>
                 @if ($product->stock !== 0 && $product->price()->available)

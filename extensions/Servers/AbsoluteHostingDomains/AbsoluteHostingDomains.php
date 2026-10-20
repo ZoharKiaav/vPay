@@ -382,6 +382,50 @@ class AbsoluteHostingDomains extends Server
         return $values;
     }
 
+    public function synchroniseCheckoutConfig(
+        array $values,
+        string $changedKey,
+        array $settings = [],
+    ): array {
+        if ($changedKey !== 'domain_sld') {
+            return $values;
+        }
+
+        $input = trim((string) (
+            $values['domain_sld'] ?? ''
+        ));
+
+        if (
+            $input === ''
+            || (
+                !str_contains($input, '.')
+                && !str_contains($input, '://')
+            )
+        ) {
+            return $values;
+        }
+
+        $normalised = $this->normaliseDomainValues($values);
+
+        $values['domain_sld'] = $normalised['domain_sld'];
+        $values['domain_tld'] = $normalised['domain_tld'];
+
+        $periodOptions = $this->periodOptions(
+            $values['domain_tld'],
+        );
+
+        $selectedPeriod = (string) (
+            $values['registration_period'] ?? ''
+        );
+
+        if (!array_key_exists($selectedPeriod, $periodOptions)) {
+            $values['registration_period'] =
+                (string) array_key_first($periodOptions);
+        }
+
+        return $values;
+    }
+
     public function prepareCheckoutConfigForCart(
         array $values,
         array $settings = [],
@@ -508,6 +552,11 @@ class AbsoluteHostingDomains extends Server
         return new DomainCatalogService($this->client());
     }
 
+    public function checkoutPriceLabel(Product $product): string
+    {
+        return 'Price calculated by domain extension';
+    }
+
     public function checkoutPrice(
         array $values,
         array $settings = [],
@@ -540,6 +589,15 @@ class AbsoluteHostingDomains extends Server
             ? $pricing['transfer_price']
             : $pricing['registration_price'];
 
+        if (
+            $action === 'transfer'
+            && (float) $providerPrice < 0
+        ) {
+            throw new \InvalidArgumentException(
+                "Transfers are not available for {$tld}.",
+            );
+        }
+
         return $this->retailPriceService()->calculate(
             providerPrice: $providerPrice,
             period: $period,
@@ -565,10 +623,15 @@ class AbsoluteHostingDomains extends Server
             $currencyCode = $record['currency_code'];
 
             $options[$tld] = sprintf(
-                '%s (%s %s)',
+                '%s · %s %s/year',
                 $tld,
                 $currencyCode,
-                $registrationPrice,
+                number_format(
+                    $registrationPrice,
+                    2,
+                    '.',
+                    '',
+                ),
             );
         }
 
@@ -628,9 +691,10 @@ class AbsoluteHostingDomains extends Server
                     $normalised['sld'],
                     $normalised['tld'],
                 );
-            } catch (
-                AbsoluteHostingException|\InvalidArgumentException $exception
-            ) {
+            } catch (AbsoluteHostingException $exception) {
+                report($exception);
+                $fail($exception->customerMessage);
+            } catch (\InvalidArgumentException $exception) {
                 $fail($exception->getMessage());
             }
         };

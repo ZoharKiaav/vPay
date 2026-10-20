@@ -138,6 +138,26 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertSame(242.50, $price);
     }
 
+    public function test_zero_cost_transfers_remain_zero_with_markup(): void
+    {
+        $this->fakePricing();
+
+        $price = $this->extension()->checkoutPrice(
+            [
+                'domain_action' => 'transfer',
+                'domain_sld' => 'example',
+                'domain_tld' => '.co.za',
+                'registration_period' => '1',
+            ],
+            [
+                'markup_percentage' => '25',
+                'markup_fixed' => '10',
+            ],
+        );
+
+        $this->assertSame(0.0, $price);
+    }
+
     public function test_it_builds_domain_checkout_configuration(): void
     {
         $this->fakePricing();
@@ -209,7 +229,7 @@ class AbsoluteHostingDomainsTest extends TestCase
         $configByName = collect($config)->keyBy('name');
 
         $this->assertSame(
-            '.co.za (ZAR 121.25)',
+            '.co.za · ZAR 121.25/year',
             $configByName['domain_tld']['options']['.co.za'],
         );
         $this->assertSame(
@@ -481,6 +501,45 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertSame([], $messages);
     }
 
+    public function test_registration_rule_hides_provider_failures(): void
+    {
+        $this->fakePricing();
+
+        Http::fake([
+            'https://api.example.test/tlds/pricing' => Http::response($this->pricingFixture()),
+            'https://api.example.test/domains/lookup' => Http::response(
+                ['message' => 'Sensitive upstream detail'],
+                503,
+            ),
+        ]);
+
+        $rule = $this->domainRule(
+            action: 'register',
+        );
+
+        $messages = [];
+
+        $rule(
+            'checkoutConfig.domain_sld',
+            'provider-error-example',
+            function (string $message) use (&$messages): void {
+                $messages[] = $message;
+            },
+        );
+
+        $this->assertSame(
+            [
+                'The domain service is temporarily unavailable. Please try again.',
+            ],
+            $messages,
+        );
+
+        $this->assertStringNotContainsString(
+            'Sensitive upstream detail',
+            implode(' ', $messages),
+        );
+    }
+
     public function test_registration_rule_rejects_unavailable_domains(): void
     {
         $this->fakePricing();
@@ -651,6 +710,114 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertFalse(
             $validator->fails(),
             implode(' ', $validator->errors()->all()),
+        );
+    }
+
+    public function test_it_synchronises_a_complete_domain_and_tld(): void
+    {
+        $this->fakePricing();
+
+        $values = $this->extension()->synchroniseCheckoutConfig(
+            [
+                'domain_sld' => 'www.example.co.za',
+                'domain_tld' => '.academy',
+                'registration_period' => '1',
+            ],
+            'domain_sld',
+        );
+
+        $this->assertSame(
+            'example',
+            $values['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $values['domain_tld'],
+        );
+        $this->assertSame(
+            '1',
+            $values['registration_period'],
+        );
+    }
+
+    public function test_it_keeps_the_selected_tld_for_an_sld(): void
+    {
+        $this->fakePricing();
+
+        $values = $this->extension()->synchroniseCheckoutConfig(
+            [
+                'domain_sld' => 'example',
+                'domain_tld' => '.co.za',
+                'registration_period' => '2',
+            ],
+            'domain_sld',
+        );
+
+        $this->assertSame(
+            'example',
+            $values['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $values['domain_tld'],
+        );
+        $this->assertSame(
+            '2',
+            $values['registration_period'],
+        );
+    }
+
+    public function test_it_uses_the_longest_supported_tld_when_synchronising(): void
+    {
+        Http::fake([
+            'https://api.example.test/tlds/pricing' => Http::response([
+                [
+                    'tld' => '.za',
+                    'registrationPrice' => '50.00',
+                    'renewalPrice' => '50.00',
+                    'transferPrice' => '0.00',
+                    'graceFee' => '0.00',
+                    'graceDays' => 10,
+                    'redemptionDays' => 20,
+                    'redemptionFee' => '600.00',
+                    'currencyCode' => 'ZAR',
+                    'years' => [1],
+                ],
+                [
+                    'tld' => '.co.za',
+                    'registrationPrice' => '93.00',
+                    'renewalPrice' => '93.00',
+                    'transferPrice' => '0.00',
+                    'graceFee' => '0.00',
+                    'graceDays' => 10,
+                    'redemptionDays' => 20,
+                    'redemptionFee' => '600.00',
+                    'currencyCode' => 'ZAR',
+                    'years' => [1, 2, 3],
+                ],
+            ]),
+        ]);
+
+        $values = $this->extension()->synchroniseCheckoutConfig(
+            [
+                'domain_sld' => 'example.co.za',
+                'domain_tld' => '.za',
+                'registration_period' => '2',
+            ],
+            'domain_sld',
+        );
+
+        $this->assertSame(
+            'example',
+            $values['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $values['domain_tld'],
+        );
+        $this->assertSame(
+            '2',
+            $values['registration_period'],
         );
     }
 

@@ -4,12 +4,14 @@ namespace App\Livewire\Products;
 
 use App\Classes\Cart;
 use App\Classes\Price;
+use App\Exceptions\CheckoutExtensionException;
 use App\Helpers\ExtensionHelper;
 use App\Livewire\Component;
 use App\Models\Category;
 use App\Models\Plan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 
@@ -123,10 +125,28 @@ class Checkout extends Component
             $setup_fee += $option->children->where('id', $this->configOptions[$option->id])->first()?->price(billing_period: $this->plan->billing_period, billing_unit: $this->plan->billing_unit)->setup_fee;
         });
 
-        $total += ExtensionHelper::getCheckoutPrice(
-            $this->product,
-            (array) $this->checkoutConfig,
-        );
+        try {
+            $total += ExtensionHelper::getCheckoutPrice(
+                $this->product,
+                (array) $this->checkoutConfig,
+            );
+
+            $this->resetValidation(
+                'checkoutConfig.domain_sld',
+            );
+        } catch (CheckoutExtensionException $exception) {
+            report($exception);
+
+            $this->addError(
+                $exception->field,
+                $exception->customerMessage,
+            );
+        } catch (InvalidArgumentException $exception) {
+            $this->addError(
+                'checkoutConfig.domain_sld',
+                $exception->getMessage(),
+            );
+        }
 
         $this->total = new Price([
             'price' => $total,
@@ -150,6 +170,41 @@ class Checkout extends Component
 
     public function updatedCheckoutConfig($value, $key)
     {
+        if ($key === 'domain_sld') {
+            try {
+                $this->checkoutConfig =
+                    ExtensionHelper::synchroniseCheckoutConfig(
+                        $this->product,
+                        (array) $this->checkoutConfig,
+                        $key,
+                    );
+
+                $this->resetValidation([
+                    'checkoutConfig.domain_sld',
+                    'checkoutConfig.domain_tld',
+                    'checkoutConfig.registration_period',
+                ]);
+            } catch (
+                CheckoutExtensionException $exception
+            ) {
+                report($exception);
+
+                $this->addError(
+                    $exception->field,
+                    $exception->customerMessage,
+                );
+
+                return;
+            } catch (InvalidArgumentException $exception) {
+                $this->addError(
+                    'checkoutConfig.domain_sld',
+                    $exception->getMessage(),
+                );
+
+                return;
+            }
+        }
+
         if ($key === 'use_custom_nameservers' && !$value) {
             $config = collect($this->getCheckoutConfig())
                 ->keyBy('name');
@@ -377,10 +432,29 @@ class Checkout extends Component
 
         // Canonicalise and revalidate extension-controlled values at the
         // final boundary before they are persisted to the cart.
-        $checkoutConfig = ExtensionHelper::prepareCheckoutConfig(
-            $this->product,
-            $checkoutConfig,
-        );
+        try {
+            $checkoutConfig =
+                ExtensionHelper::prepareCheckoutConfig(
+                    $this->product,
+                    $checkoutConfig,
+                );
+        } catch (CheckoutExtensionException $exception) {
+            report($exception);
+
+            $this->addError(
+                $exception->field,
+                $exception->customerMessage,
+            );
+
+            return;
+        } catch (InvalidArgumentException $exception) {
+            $this->addError(
+                'checkoutConfig.domain_sld',
+                $exception->getMessage(),
+            );
+
+            return;
+        }
 
         $this->checkoutConfig = $checkoutConfig;
 

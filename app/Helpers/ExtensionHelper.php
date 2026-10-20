@@ -131,6 +131,36 @@ class ExtensionHelper
     }
 
     /**
+     * Get an extension-controlled product price label.
+     */
+    public static function getCheckoutPriceLabel(
+        Product $product,
+    ): ?string {
+        $server = $product->server;
+
+        if (
+            !$server
+            || !self::hasFunction(
+                $server,
+                'checkoutPriceLabel',
+            )
+        ) {
+            return null;
+        }
+
+        $label = self::call(
+            $server,
+            'checkoutPriceLabel',
+            [$product],
+            mayFail: true,
+        );
+
+        return is_string($label) && trim($label) !== ''
+            ? trim($label)
+            : null;
+    }
+
+    /**
      * Get the authoritative extension-controlled checkout price.
      */
     public static function getCheckoutPrice(Product $product, array $values = []): float
@@ -146,6 +176,38 @@ class ExtensionHelper
             'checkoutPrice',
             [$values, self::settingsToArray($product->settings)],
         ) ?? 0.0);
+    }
+
+    /**
+     * Synchronise extension-controlled checkout values while the customer
+     * edits the checkout form.
+     */
+    public static function synchroniseCheckoutConfig(
+        Product $product,
+        array $values,
+        string $changedKey,
+    ): array {
+        $server = $product->server;
+
+        if (
+            !$server
+            || !self::hasFunction(
+                $server,
+                'synchroniseCheckoutConfig',
+            )
+        ) {
+            return $values;
+        }
+
+        return (array) self::call(
+            $server,
+            'synchroniseCheckoutConfig',
+            [
+                $values,
+                $changedKey,
+                self::settingsToArray($product->settings),
+            ],
+        );
     }
 
     /**

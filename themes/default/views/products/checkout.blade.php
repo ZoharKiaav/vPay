@@ -1,4 +1,19 @@
-<div class="container mt-14 flex flex-col md:grid md:grid-cols-4 gap-6">
+<div
+    class="container mt-14 flex flex-col gap-6 md:grid md:grid-cols-4"
+    x-data
+    x-init="
+        if (@js((bool) $cartProductKey)) {
+            $nextTick(() => {
+                document
+                    .getElementById('registrar-domain-controls')
+                    ?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                    });
+            });
+        }
+    "
+>
     <div class="flex flex-col gap-4 w-full col-span-3">
         <h1 class="text-3xl font-bold">{{ $product->name }}</h1>
         <div class="flex flex-row w-full gap-4">
@@ -56,7 +71,7 @@
             @php $configOption = (object) $configOption; @endphp
             @if ($configOption->visible ?? true)
                 @if ($configOption->name === 'use_custom_nameservers')
-                    <div class="mt-3 border-t border-neutral pt-4">
+                    <div class="mt-3 rounded-lg border border-neutral bg-background-secondary/40 px-4 py-4">
                         <h2 class="text-lg font-semibold text-primary-100">
                             DNS settings
                         </h2>
@@ -67,7 +82,7 @@
                 @endif
 
                 @if ($configOption->name === 'epp_code')
-                    <div class="mt-3 border-t border-neutral pt-4">
+                    <div class="mt-3 rounded-lg border border-neutral bg-background-secondary/40 px-4 py-4">
                         <h2 class="text-lg font-semibold text-primary-100">
                             Transfer authorisation
                         </h2>
@@ -77,6 +92,23 @@
                     </div>
                 @endif
 
+                @if ($configOption->name === 'domain_sld')
+                    <div
+                        id="registrar-domain-controls"
+                        class="registrar-domain-controls grid grid-cols-1 gap-4 rounded-lg border border-neutral bg-background-secondary/40 p-4 md:grid-cols-2"
+                    >
+                @endif
+
+                <div
+                    @class([
+                        'min-w-0',
+                        'rounded-lg border border-neutral bg-background-secondary/40 p-4' => in_array(
+                            $configOption->name,
+                            ['use_custom_nameservers', 'epp_code'],
+                            true,
+                        ),
+                    ])
+                >
                 <x-form.configoption :config="$configOption" :name="'checkoutConfig.' . $configOption->name">
                 @if ($configOption->type == 'select')
                     @foreach ($configOption->options as $configOptionValue => $configOptionValueName)
@@ -97,6 +129,69 @@
                     @endforeach
                 @endif
                 </x-form.configoption>
+                </div>
+
+                @if ($configOption->name === 'domain_tld')
+                    </div>
+
+                    @php
+                        $domainInput = trim((string) (
+                            $checkoutConfig['domain_sld'] ?? ''
+                        ));
+
+                        $domainTld = trim((string) (
+                            $checkoutConfig['domain_tld'] ?? ''
+                        ));
+
+                        $domainInputWithoutDot = rtrim(
+                            strtolower($domainInput),
+                            '.',
+                        );
+
+                        $tldWithoutDot = ltrim(
+                            strtolower($domainTld),
+                            '.',
+                        );
+
+                        $canonicalDomain = $domainInputWithoutDot;
+
+                        if (
+                            $canonicalDomain !== ''
+                            && $tldWithoutDot !== ''
+                            && !str_ends_with(
+                                $canonicalDomain,
+                                '.' . $tldWithoutDot,
+                            )
+                        ) {
+                            $canonicalDomain .=
+                                '.' . $tldWithoutDot;
+                        }
+                    @endphp
+
+                    @if ($canonicalDomain !== '')
+                        <div class="mt-3 grid grid-cols-1 gap-3 rounded-lg border border-secondary/30 bg-secondary/10 px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                            <div class="min-w-0">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-primary-100/60">
+                                    Selected domain
+                                </div>
+
+                                <div class="break-all text-lg font-semibold text-primary-100">
+                                    {{ $canonicalDomain }}
+                                </div>
+                            </div>
+
+                            <div class="sm:text-right">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-primary-100/60">
+                                    Current total
+                                </div>
+
+                                <div class="text-lg font-semibold text-primary-100">
+                                    {{ $total }}
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                @endif
 
                 @if ($configOption->name === 'domain_action')
                     <div class="mt-1 text-sm text-primary-100/75">
@@ -109,49 +204,19 @@
                 @endif
 
                 @if ($configOption->name === 'domain_sld')
-                    <div class="mt-1 text-sm text-primary-100/75">
+                    <div class="-mt-2 rounded-b-lg border-x border-b border-neutral bg-background-secondary/40 px-4 pb-4 text-sm text-primary-100/75">
                         Enter either a name such as
                         <span class="font-medium text-primary-100">example</span>
                         or a complete domain such as
                         <span class="font-medium text-primary-100">example.co.za</span>.
                     </div>
 
-                    @php
-                        $domainInput = trim((string) ($checkoutConfig['domain_sld'] ?? ''));
-                        $domainTld = trim((string) ($checkoutConfig['domain_tld'] ?? ''));
-                        $domainInputWithoutDot = rtrim(strtolower($domainInput), '.');
-                        $tldWithoutDot = ltrim(strtolower($domainTld), '.');
-
-                        $canonicalDomain = $domainInputWithoutDot;
-
-                        if (
-                            $canonicalDomain !== ''
-                            && $tldWithoutDot !== ''
-                            && !str_ends_with(
-                                $canonicalDomain,
-                                '.' . $tldWithoutDot,
-                            )
-                        ) {
-                            $canonicalDomain .= '.' . $tldWithoutDot;
-                        }
-                    @endphp
-
-                    @if ($canonicalDomain !== '')
-                        <div class="mt-2 rounded-md border border-neutral bg-background-secondary px-3 py-2">
-                            <div class="text-xs uppercase tracking-wide text-primary-100/60">
-                                Selected domain
-                            </div>
-                            <div class="font-semibold text-primary-100">
-                                {{ $canonicalDomain }}
-                            </div>
-                        </div>
-                    @endif
                 @endif
 
             @endif
         @endforeach
     </div>
-    <div class="flex flex-col gap-2 w-full col-span-1 bg-background-secondary p-3 rounded-md h-fit">
+    <div class="flex flex-col gap-3 w-full col-span-1 rounded-lg border border-neutral bg-background-secondary p-4 h-fit md:sticky md:top-6">
         <h2 class="text-2xl font-semibold  mb-2">
             {{ __('product.order_summary') }}
         </h2>

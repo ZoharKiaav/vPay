@@ -35,7 +35,9 @@ class DomainOrderPayloadFactory
             'domain' => $domain,
             'regperiod' => $period,
             'idnLanguage' => '',
-            'domainfields' => base64_encode(serialize([])),
+            'domainfields' => base64_encode(serialize(
+                $this->domainFields($serviceProperties),
+            )),
             'addons' => [
                 'dnsmanagement' => 0,
                 'emailforwarding' => 0,
@@ -173,10 +175,12 @@ class DomainOrderPayloadFactory
                     'The customer property country is required.',
                 ),
             ),
-            'phonenumber' => $this->requiredString(
-                $properties,
-                'phone',
-                'The customer property phone is required.',
+            'phonenumber' => $this->normalisePhone(
+                $this->requiredString(
+                    $properties,
+                    'phone',
+                    'The customer property phone is required.',
+                ),
             ),
             'tax_id' => $this->optionalString(
                 $properties,
@@ -221,6 +225,63 @@ class DomainOrderPayloadFactory
             'ns4' => $nameservers[3],
             'ns5' => $nameservers[4],
         ];
+    }
+
+    private function domainFields(array $properties): array
+    {
+        $fields = $properties['domain_fields'] ?? [];
+
+        if (!is_array($fields)) {
+            throw new InvalidArgumentException(
+                'Domain-specific fields must be an array.',
+            );
+        }
+
+        $normalised = [];
+
+        foreach ($fields as $key => $value) {
+            $key = trim((string) $key);
+
+            if ($key === '') {
+                throw new InvalidArgumentException(
+                    'Domain-specific field names cannot be empty.',
+                );
+            }
+
+            if (
+                !is_scalar($value)
+                && $value !== null
+            ) {
+                throw new InvalidArgumentException(
+                    'Domain-specific field values must be scalar.',
+                );
+            }
+
+            $normalised[$key] = is_string($value)
+                ? trim($value)
+                : $value;
+        }
+
+        return $normalised;
+    }
+
+    private function normalisePhone(string $phone): string
+    {
+        $phone = trim($phone);
+
+        if (
+            strlen($phone) > 32
+            || preg_match(
+                '/^\+?[0-9][0-9\s().-]{5,31}$/',
+                $phone,
+            ) !== 1
+        ) {
+            throw new InvalidArgumentException(
+                'The customer phone number is invalid.',
+            );
+        }
+
+        return $phone;
     }
 
     private function normaliseCountry(string $country): string
