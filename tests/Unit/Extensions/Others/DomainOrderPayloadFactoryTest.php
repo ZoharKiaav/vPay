@@ -83,6 +83,137 @@ class DomainOrderPayloadFactoryTest extends TestCase
         );
     }
 
+    public function test_it_builds_an_international_registration_payload(): void
+    {
+        $serviceProperties = $this->serviceProperties();
+        $serviceProperties['domain_tld'] = '.CO.UK';
+
+        $properties = $this->customerProperties();
+        $properties['phone'] = '+44 20 7946 0958';
+        $properties['company_name'] = '';
+        $properties['country'] = 'GB';
+        $properties['address'] = '10 Example Street';
+        $properties['city'] = 'London';
+        $properties['state'] = 'Greater London';
+        $properties['zip'] = 'SW1A 1AA';
+
+        $payload = $this->factory()->make(
+            'register',
+            $serviceProperties,
+            $this->customer(),
+            $properties,
+        );
+
+        $registrant = $payload['contacts']['registrant'];
+
+        $this->assertSame(
+            'example.co.uk',
+            $payload['domain'],
+        );
+        $this->assertSame(
+            'GB',
+            $registrant['country'],
+        );
+        $this->assertSame(
+            '+44 20 7946 0958',
+            $registrant['phonenumber'],
+        );
+        $this->assertSame(
+            'Greater London',
+            $registrant['state'],
+        );
+        $this->assertSame(
+            'SW1A 1AA',
+            $registrant['postcode'],
+        );
+        $this->assertSame(
+            '',
+            $registrant['companyname'],
+        );
+    }
+
+    public function test_it_serialises_domain_specific_fields(): void
+    {
+        $serviceProperties = $this->serviceProperties();
+
+        $serviceProperties['domain_fields'] = [
+            'registrant_type' => 'individual',
+            'identity_number' => ' TEST-123 ',
+            'accept_terms' => true,
+        ];
+
+        $payload = $this->factory()->make(
+            'register',
+            $serviceProperties,
+            $this->customer(),
+            $this->customerProperties(),
+        );
+
+        $domainFields = unserialize(
+            base64_decode(
+                $payload['domainfields'],
+                true,
+            ),
+            ['allowed_classes' => false],
+        );
+
+        $this->assertSame(
+            [
+                'registrant_type' => 'individual',
+                'identity_number' => 'TEST-123',
+                'accept_terms' => true,
+            ],
+            $domainFields,
+        );
+    }
+
+    public function test_it_rejects_nested_domain_specific_fields(): void
+    {
+        $serviceProperties = $this->serviceProperties();
+
+        $serviceProperties['domain_fields'] = [
+            'nested' => [
+                'unsafe' => 'value',
+            ],
+        ];
+
+        $this->expectException(
+            InvalidArgumentException::class,
+        );
+
+        $this->expectExceptionMessage(
+            'Domain-specific field values must be scalar.',
+        );
+
+        $this->factory()->make(
+            'register',
+            $serviceProperties,
+            $this->customer(),
+            $this->customerProperties(),
+        );
+    }
+
+    public function test_it_rejects_an_invalid_international_phone(): void
+    {
+        $properties = $this->customerProperties();
+        $properties['phone'] = 'not-a-phone';
+
+        $this->expectException(
+            InvalidArgumentException::class,
+        );
+
+        $this->expectExceptionMessage(
+            'The customer phone number is invalid.',
+        );
+
+        $this->factory()->make(
+            'register',
+            $this->serviceProperties(),
+            $this->customer(),
+            $properties,
+        );
+    }
+
     public function test_it_requires_all_registration_contact_fields(): void
     {
         $properties = $this->customerProperties();
