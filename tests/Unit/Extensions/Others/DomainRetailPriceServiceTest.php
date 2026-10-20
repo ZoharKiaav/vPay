@@ -36,6 +36,34 @@ class DomainRetailPriceServiceTest extends TestCase
         $this->assertSame(242.50, $price);
     }
 
+    public function test_it_preserves_a_zero_provider_price(): void
+    {
+        $price = $this->service()->calculate(
+            providerPrice: '0.00',
+            period: 1,
+            settings: [
+                'markup_percentage' => '25',
+                'markup_fixed' => '10',
+            ],
+        );
+
+        $this->assertSame(0.0, $price);
+    }
+
+    public function test_it_marks_up_a_positive_transfer_price(): void
+    {
+        $price = $this->service()->calculate(
+            providerPrice: '80.00',
+            period: 1,
+            settings: [
+                'markup_percentage' => '25',
+                'markup_fixed' => '10',
+            ],
+        );
+
+        $this->assertSame(110.0, $price);
+    }
+
     public function test_it_preserves_provider_price_without_markup(): void
     {
         $price = $this->service()->calculate(

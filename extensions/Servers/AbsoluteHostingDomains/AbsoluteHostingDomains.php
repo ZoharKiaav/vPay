@@ -552,6 +552,11 @@ class AbsoluteHostingDomains extends Server
         return new DomainCatalogService($this->client());
     }
 
+    public function checkoutPriceLabel(Product $product): string
+    {
+        return 'Price calculated by domain extension';
+    }
+
     public function checkoutPrice(
         array $values,
         array $settings = [],
@@ -584,6 +589,15 @@ class AbsoluteHostingDomains extends Server
             ? $pricing['transfer_price']
             : $pricing['registration_price'];
 
+        if (
+            $action === 'transfer'
+            && (float) $providerPrice < 0
+        ) {
+            throw new \InvalidArgumentException(
+                "Transfers are not available for {$tld}.",
+            );
+        }
+
         return $this->retailPriceService()->calculate(
             providerPrice: $providerPrice,
             period: $period,
@@ -609,10 +623,15 @@ class AbsoluteHostingDomains extends Server
             $currencyCode = $record['currency_code'];
 
             $options[$tld] = sprintf(
-                '%s (%s %s)',
+                '%s · %s %s/year',
                 $tld,
                 $currencyCode,
-                $registrationPrice,
+                number_format(
+                    $registrationPrice,
+                    2,
+                    '.',
+                    '',
+                ),
             );
         }
 

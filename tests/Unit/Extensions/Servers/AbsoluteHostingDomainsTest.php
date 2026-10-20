@@ -138,6 +138,26 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertSame(242.50, $price);
     }
 
+    public function test_zero_cost_transfers_remain_zero_with_markup(): void
+    {
+        $this->fakePricing();
+
+        $price = $this->extension()->checkoutPrice(
+            [
+                'domain_action' => 'transfer',
+                'domain_sld' => 'example',
+                'domain_tld' => '.co.za',
+                'registration_period' => '1',
+            ],
+            [
+                'markup_percentage' => '25',
+                'markup_fixed' => '10',
+            ],
+        );
+
+        $this->assertSame(0.0, $price);
+    }
+
     public function test_it_builds_domain_checkout_configuration(): void
     {
         $this->fakePricing();
@@ -209,7 +229,7 @@ class AbsoluteHostingDomainsTest extends TestCase
         $configByName = collect($config)->keyBy('name');
 
         $this->assertSame(
-            '.co.za (ZAR 121.25)',
+            '.co.za · ZAR 121.25/year',
             $configByName['domain_tld']['options']['.co.za'],
         );
         $this->assertSame(

@@ -37,6 +37,10 @@ class DomainRetailPriceService
             'The fixed markup must be a non-negative number.',
         );
 
+        if ($providerPrice === 0.0) {
+            return 0.0;
+        }
+
         $annualRetailPrice = (
             $providerPrice * (1 + ($percentageMarkup / 100))
         ) + $fixedMarkup;
