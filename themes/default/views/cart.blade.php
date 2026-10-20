@@ -12,11 +12,133 @@
                     <h2 class="text-2xl font-semibold">
                         {{ $item->product->name }}
                     </h2>
-                    <p class="text-sm">
+                    @if (count($item->config_options) > 0)
+                    <div class="text-sm text-primary-100/80">
                         @foreach ($item->config_options as $option)
-                        {{ $option['option_name'] }}: {{ $option['value_name'] }}<br>
+                        <div>
+                            <span class="font-medium">
+                                {{ $option['option_name'] }}:
+                            </span>
+                            {{ $option['value_name'] }}
+                        </div>
                         @endforeach
-                    </p>
+                    </div>
+                    @endif
+
+                    @php
+                        $checkoutConfig = (array) ($item->checkout_config ?? []);
+
+                        $domainSld = trim((string) (
+                            $checkoutConfig['domain_sld'] ?? ''
+                        ));
+
+                        $domainTld = '.' . strtolower(ltrim(
+                            trim((string) (
+                                $checkoutConfig['domain_tld'] ?? ''
+                            )),
+                            '.',
+                        ));
+
+                        $isDomainItem =
+                            $domainSld !== ''
+                            && $domainTld !== '.';
+
+                        $canonicalDomain = $isDomainItem
+                            ? strtolower($domainSld) . $domainTld
+                            : null;
+
+                        $domainAction = strtolower(trim((string) (
+                            $checkoutConfig['domain_action']
+                                ?? 'register'
+                        )));
+
+                        $registrationPeriod = max(
+                            1,
+                            (int) (
+                                $checkoutConfig['registration_period']
+                                    ?? 1
+                            ),
+                        );
+
+                        $usesCustomNameservers = filter_var(
+                            $checkoutConfig['use_custom_nameservers']
+                                ?? false,
+                            FILTER_VALIDATE_BOOL,
+                        );
+
+                        $nameservers = collect([
+                            $checkoutConfig['nameserver_1'] ?? null,
+                            $checkoutConfig['nameserver_2'] ?? null,
+                            $checkoutConfig['nameserver_3'] ?? null,
+                            $checkoutConfig['nameserver_4'] ?? null,
+                            $checkoutConfig['nameserver_5'] ?? null,
+                        ])->map(
+                            static fn (mixed $nameserver): string =>
+                                trim((string) $nameserver),
+                        )->filter()->values();
+                    @endphp
+
+                    @if ($isDomainItem)
+                    <div class="mt-3 rounded-md border border-neutral bg-background px-3 py-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-primary-100/60">
+                            Domain details
+                        </div>
+
+                        <dl class="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-[9rem_1fr]">
+                            <dt class="text-primary-100/70">
+                                Domain
+                            </dt>
+                            <dd class="font-semibold break-all text-primary-100">
+                                {{ $canonicalDomain }}
+                            </dd>
+
+                            <dt class="text-primary-100/70">
+                                Action
+                            </dt>
+                            <dd class="text-primary-100">
+                                {{ $domainAction === 'transfer' ? 'Domain transfer' : 'New registration' }}
+                            </dd>
+
+                            <dt class="text-primary-100/70">
+                                Period
+                            </dt>
+                            <dd class="text-primary-100">
+                                {{ $registrationPeriod }}
+                                {{ $registrationPeriod === 1 ? 'year' : 'years' }}
+                            </dd>
+
+                            <dt class="text-primary-100/70">
+                                DNS
+                            </dt>
+                            <dd class="text-primary-100">
+                                {{ $usesCustomNameservers ? 'Custom nameservers' : 'vKloud nameservers' }}
+                            </dd>
+
+                            @if ($nameservers->isNotEmpty())
+                            <dt class="text-primary-100/70">
+                                Nameservers
+                            </dt>
+                            <dd class="break-words text-primary-100">
+                                {{ $nameservers->join(', ') }}
+                            </dd>
+                            @endif
+
+                            @if (
+                                $domainAction === 'transfer'
+                                && filled(
+                                    $checkoutConfig['epp_code'] ?? null
+                                )
+                            )
+                            <dt class="text-primary-100/70">
+                                Transfer code
+                            </dt>
+                            <dd class="text-primary-100">
+                                Added
+                            </dd>
+                            @endif
+                        </dl>
+                    </div>
+                    @endif
                 </div>
                 <div class="flex flex-col justify-between items-end gap-4">
                     <h3 class="text-xl font-semibold p-1">
