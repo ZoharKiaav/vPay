@@ -148,11 +148,6 @@
                     @endif
                 @endif
 
-                @error('checkoutConfig.' . $configOption->name)
-                    <div class="mt-1 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-500">
-                        {{ $message }}
-                    </div>
-                @enderror
             @endif
         @endforeach
     </div>

@@ -621,6 +621,39 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertSame([], $messages);
     }
 
+    public function test_checkout_validation_accepts_a_full_domain(): void
+    {
+        $this->fakePricing();
+        $this->fakeLookup(
+            isRegistered: false,
+            isAvailable: true,
+        );
+
+        $config = $this->extension()->getCheckoutConfig(
+            new Product,
+            [
+                'domain_action' => 'register',
+                'domain_tld' => '.co.za',
+            ],
+        );
+
+        $configByName = collect($config)->keyBy('name');
+
+        $validator = validator(
+            [
+                'domain' => 'vkloud-example.co.za',
+            ],
+            [
+                'domain' => $configByName['domain_sld']['validation'],
+            ],
+        );
+
+        $this->assertFalse(
+            $validator->fails(),
+            implode(' ', $validator->errors()->all()),
+        );
+    }
+
     public function test_it_prepares_canonical_registration_values_for_cart(): void
     {
         $this->fakePricing();
@@ -725,7 +758,14 @@ class AbsoluteHostingDomainsTest extends TestCase
             ],
         );
 
-        return $config[1]['validation'][4];
+        $rule = collect($config[1]['validation'])
+            ->first(
+                static fn (mixed $rule): bool => $rule instanceof \Closure,
+            );
+
+        $this->assertInstanceOf(\Closure::class, $rule);
+
+        return $rule;
     }
 
     private function fakePricing(): void
