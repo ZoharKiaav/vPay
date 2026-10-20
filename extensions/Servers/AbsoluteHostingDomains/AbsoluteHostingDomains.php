@@ -222,8 +222,7 @@ class AbsoluteHostingDomains extends Server
                 'validation' => [
                     'required',
                     'string',
-                    'max:63',
-                    'regex:/^(?:[a-z0-9]|[a-z0-9][a-z0-9-]{0,61}[a-z0-9])$/i',
+                    'max:253',
                     $this->domainEligibilityRule(
                         $action,
                         $selectedTld,
