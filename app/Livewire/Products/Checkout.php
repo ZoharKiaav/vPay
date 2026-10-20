@@ -150,6 +150,21 @@ class Checkout extends Component
 
     public function updatedCheckoutConfig($value, $key)
     {
+        if ($key === 'domain_sld') {
+            $this->checkoutConfig =
+                ExtensionHelper::synchroniseCheckoutConfig(
+                    $this->product,
+                    (array) $this->checkoutConfig,
+                    $key,
+                );
+
+            $this->resetValidation([
+                'checkoutConfig.domain_sld',
+                'checkoutConfig.domain_tld',
+                'checkoutConfig.registration_period',
+            ]);
+        }
+
         if ($key === 'use_custom_nameservers' && !$value) {
             $config = collect($this->getCheckoutConfig())
                 ->keyBy('name');

@@ -149,6 +149,38 @@ class ExtensionHelper
     }
 
     /**
+     * Synchronise extension-controlled checkout values while the customer
+     * edits the checkout form.
+     */
+    public static function synchroniseCheckoutConfig(
+        Product $product,
+        array $values,
+        string $changedKey,
+    ): array {
+        $server = $product->server;
+
+        if (
+            !$server
+            || !self::hasFunction(
+                $server,
+                'synchroniseCheckoutConfig',
+            )
+        ) {
+            return $values;
+        }
+
+        return (array) self::call(
+            $server,
+            'synchroniseCheckoutConfig',
+            [
+                $values,
+                $changedKey,
+                self::settingsToArray($product->settings),
+            ],
+        );
+    }
+
+    /**
      * Prepare extension-controlled checkout values immediately before
      * adding the item to the cart.
      */

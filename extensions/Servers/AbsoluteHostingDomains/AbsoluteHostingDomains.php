@@ -382,6 +382,50 @@ class AbsoluteHostingDomains extends Server
         return $values;
     }
 
+    public function synchroniseCheckoutConfig(
+        array $values,
+        string $changedKey,
+        array $settings = [],
+    ): array {
+        if ($changedKey !== 'domain_sld') {
+            return $values;
+        }
+
+        $input = trim((string) (
+            $values['domain_sld'] ?? ''
+        ));
+
+        if (
+            $input === ''
+            || (
+                !str_contains($input, '.')
+                && !str_contains($input, '://')
+            )
+        ) {
+            return $values;
+        }
+
+        $normalised = $this->normaliseDomainValues($values);
+
+        $values['domain_sld'] = $normalised['domain_sld'];
+        $values['domain_tld'] = $normalised['domain_tld'];
+
+        $periodOptions = $this->periodOptions(
+            $values['domain_tld'],
+        );
+
+        $selectedPeriod = (string) (
+            $values['registration_period'] ?? ''
+        );
+
+        if (!array_key_exists($selectedPeriod, $periodOptions)) {
+            $values['registration_period'] =
+                (string) array_key_first($periodOptions);
+        }
+
+        return $values;
+    }
+
     public function prepareCheckoutConfigForCart(
         array $values,
         array $settings = [],

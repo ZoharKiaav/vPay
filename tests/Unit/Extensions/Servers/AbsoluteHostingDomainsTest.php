@@ -654,6 +654,114 @@ class AbsoluteHostingDomainsTest extends TestCase
         );
     }
 
+    public function test_it_synchronises_a_complete_domain_and_tld(): void
+    {
+        $this->fakePricing();
+
+        $values = $this->extension()->synchroniseCheckoutConfig(
+            [
+                'domain_sld' => 'www.example.co.za',
+                'domain_tld' => '.academy',
+                'registration_period' => '1',
+            ],
+            'domain_sld',
+        );
+
+        $this->assertSame(
+            'example',
+            $values['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $values['domain_tld'],
+        );
+        $this->assertSame(
+            '1',
+            $values['registration_period'],
+        );
+    }
+
+    public function test_it_keeps_the_selected_tld_for_an_sld(): void
+    {
+        $this->fakePricing();
+
+        $values = $this->extension()->synchroniseCheckoutConfig(
+            [
+                'domain_sld' => 'example',
+                'domain_tld' => '.co.za',
+                'registration_period' => '2',
+            ],
+            'domain_sld',
+        );
+
+        $this->assertSame(
+            'example',
+            $values['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $values['domain_tld'],
+        );
+        $this->assertSame(
+            '2',
+            $values['registration_period'],
+        );
+    }
+
+    public function test_it_uses_the_longest_supported_tld_when_synchronising(): void
+    {
+        Http::fake([
+            'https://api.example.test/tlds/pricing' => Http::response([
+                [
+                    'tld' => '.za',
+                    'registrationPrice' => '50.00',
+                    'renewalPrice' => '50.00',
+                    'transferPrice' => '0.00',
+                    'graceFee' => '0.00',
+                    'graceDays' => 10,
+                    'redemptionDays' => 20,
+                    'redemptionFee' => '600.00',
+                    'currencyCode' => 'ZAR',
+                    'years' => [1],
+                ],
+                [
+                    'tld' => '.co.za',
+                    'registrationPrice' => '93.00',
+                    'renewalPrice' => '93.00',
+                    'transferPrice' => '0.00',
+                    'graceFee' => '0.00',
+                    'graceDays' => 10,
+                    'redemptionDays' => 20,
+                    'redemptionFee' => '600.00',
+                    'currencyCode' => 'ZAR',
+                    'years' => [1, 2, 3],
+                ],
+            ]),
+        ]);
+
+        $values = $this->extension()->synchroniseCheckoutConfig(
+            [
+                'domain_sld' => 'example.co.za',
+                'domain_tld' => '.za',
+                'registration_period' => '2',
+            ],
+            'domain_sld',
+        );
+
+        $this->assertSame(
+            'example',
+            $values['domain_sld'],
+        );
+        $this->assertSame(
+            '.co.za',
+            $values['domain_tld'],
+        );
+        $this->assertSame(
+            '2',
+            $values['registration_period'],
+        );
+    }
+
     public function test_it_prepares_canonical_registration_values_for_cart(): void
     {
         $this->fakePricing();
