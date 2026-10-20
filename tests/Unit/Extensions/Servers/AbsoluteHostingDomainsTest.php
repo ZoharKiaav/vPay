@@ -481,6 +481,45 @@ class AbsoluteHostingDomainsTest extends TestCase
         $this->assertSame([], $messages);
     }
 
+    public function test_registration_rule_hides_provider_failures(): void
+    {
+        $this->fakePricing();
+
+        Http::fake([
+            'https://api.example.test/tlds/pricing' => Http::response($this->pricingFixture()),
+            'https://api.example.test/domains/lookup' => Http::response(
+                ['message' => 'Sensitive upstream detail'],
+                503,
+            ),
+        ]);
+
+        $rule = $this->domainRule(
+            action: 'register',
+        );
+
+        $messages = [];
+
+        $rule(
+            'checkoutConfig.domain_sld',
+            'provider-error-example',
+            function (string $message) use (&$messages): void {
+                $messages[] = $message;
+            },
+        );
+
+        $this->assertSame(
+            [
+                'The domain service is temporarily unavailable. Please try again.',
+            ],
+            $messages,
+        );
+
+        $this->assertStringNotContainsString(
+            'Sensitive upstream detail',
+            implode(' ', $messages),
+        );
+    }
+
     public function test_registration_rule_rejects_unavailable_domains(): void
     {
         $this->fakePricing();

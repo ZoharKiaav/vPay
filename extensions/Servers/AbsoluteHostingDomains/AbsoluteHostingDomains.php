@@ -672,9 +672,10 @@ class AbsoluteHostingDomains extends Server
                     $normalised['sld'],
                     $normalised['tld'],
                 );
-            } catch (
-                AbsoluteHostingException|\InvalidArgumentException $exception
-            ) {
+            } catch (AbsoluteHostingException $exception) {
+                report($exception);
+                $fail($exception->customerMessage);
+            } catch (\InvalidArgumentException $exception) {
                 $fail($exception->getMessage());
             }
         };

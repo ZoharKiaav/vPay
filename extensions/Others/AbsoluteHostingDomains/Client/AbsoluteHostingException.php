@@ -2,10 +2,10 @@
 
 namespace Paymenter\Extensions\Others\AbsoluteHostingDomains\Client;
 
-use RuntimeException;
+use App\Exceptions\CheckoutExtensionException;
 use Throwable;
 
-class AbsoluteHostingException extends RuntimeException
+class AbsoluteHostingException extends CheckoutExtensionException
 {
     public function __construct(
         string $message,
@@ -13,6 +13,10 @@ class AbsoluteHostingException extends RuntimeException
         public readonly mixed $responseData = null,
         ?Throwable $previous = null,
     ) {
-        parent::__construct($message, 0, $previous);
+        parent::__construct(
+            diagnosticMessage: $message,
+            customerMessage: 'The domain service is temporarily unavailable. Please try again.',
+            previous: $previous,
+        );
     }
 }
