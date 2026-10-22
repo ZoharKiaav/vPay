@@ -109,6 +109,38 @@ class DomainOrderServiceTest extends TestCase
         $this->assertCount(0, $domain->savedStates);
     }
 
+    public function test_it_blocks_resubmission_while_an_order_is_submitting(): void
+    {
+        $domain = $this->managedDomain();
+        $domain->provider_status =
+            DomainOrderService::PROVIDER_STATUS_SUBMITTING;
+
+        $client = $this->client();
+
+        try {
+            $this->service($client)->submit(
+                $domain,
+                'register',
+                $this->serviceProperties(),
+                $this->customer(),
+                $this->customerProperties(),
+            );
+
+            $this->fail(
+                'Expected submitting-order guard failure.'
+            );
+        } catch (LogicException $exception) {
+            $this->assertSame(
+                'A provider order has already been attempted for this service.',
+                $exception->getMessage(),
+            );
+        }
+
+        $this->assertSame(0, $client->registrationCalls);
+        $this->assertSame(0, $client->transferCalls);
+        $this->assertCount(0, $domain->savedStates);
+    }
+
     public function test_it_marks_a_failed_request_as_uncertain(): void
     {
         $domain = $this->managedDomain();

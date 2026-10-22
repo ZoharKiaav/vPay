@@ -52,6 +52,94 @@ class ManagedDomain extends Model
         return $this->belongsTo(Service::class);
     }
 
+    public function operationalSummary(): array
+    {
+        $providerData = is_array($this->provider_data)
+            ? $this->provider_data
+            : [];
+
+        $operation = $providerData['operation'] ?? null;
+
+        return [
+            'domain' => $this->domain_name,
+            'action' => match ($operation) {
+                'register' => 'New registration',
+                'transfer' => 'Domain transfer',
+                default => 'Unknown',
+            },
+            'domain_status' => $this->statusLabel(),
+            'provider_status' => $this->providerStatusLabel(),
+            'period' => $this->registration_period === 1
+                ? '1 year'
+                : "{$this->registration_period} years",
+            'nameservers' => array_values(
+                array_filter(
+                    $this->nameservers ?? [],
+                    static fn (mixed $value): bool => is_string($value) && trim($value) !== '',
+                ),
+            ),
+            'provider_reference' => $this->providerReference(),
+            'last_synced_at' => $this->last_synced_at?->toIso8601String(),
+            'warning' => $this->provider_status === 'uncertain'
+                ? 'The provider result is uncertain. Verify the order before any retry.'
+                : null,
+        ];
+    }
+
+    private function statusLabel(): string
+    {
+        return match ($this->status) {
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_ACTIVE => 'Active',
+            self::STATUS_TRANSFER_PENDING => 'Transfer pending',
+            self::STATUS_EXPIRED => 'Expired',
+            self::STATUS_REDEMPTION => 'Redemption',
+            self::STATUS_CANCELLED => 'Cancelled',
+            default => 'Unknown',
+        };
+    }
+
+    private function providerStatusLabel(): string
+    {
+        return match ($this->provider_status) {
+            null, '' => 'Not submitted',
+            'submitting' => 'Submitting',
+            'submitted' => 'Submitted',
+            'uncertain' => 'Uncertain',
+            default => 'Unknown',
+        };
+    }
+
+    private function providerReference(): ?string
+    {
+        $providerData = is_array($this->provider_data)
+            ? $this->provider_data
+            : [];
+
+        $response = is_array($providerData['response'] ?? null)
+            ? $providerData['response']
+            : [];
+
+        foreach ([
+            'order_reference',
+            'orderReference',
+            'order_id',
+            'orderId',
+            'id',
+        ] as $key) {
+            $value = $response[$key] ?? null;
+
+            if (
+                is_scalar($value)
+                && trim((string) $value) !== ''
+            ) {
+                return trim((string) $value);
+            }
+        }
+
+        return null;
+    }
+
     public function setDomainNameAttribute(string $value): void
     {
         $this->attributes['domain_name'] = strtolower(

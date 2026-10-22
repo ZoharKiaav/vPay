@@ -14,6 +14,7 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Paymenter\Extensions\Others\AbsoluteHostingDomains\Models\ManagedDomain;
 
 class EditService extends EditRecord
 {
@@ -122,12 +123,20 @@ class EditService extends EditRecord
 
     protected function getHeaderWidgets(): array
     {
-        if (!$this->record->cancellation()->exists()) {
-            return [];
+        $widgets = [];
+
+        if (
+            ManagedDomain::query()
+                ->where('service_id', $this->record->getKey())
+                ->exists()
+        ) {
+            $widgets[] = ServiceResource\Widgets\RegistrarOrderOverview::class;
         }
 
-        return [
-            ServiceResource\Widgets\CancellationOverview::class,
-        ];
+        if ($this->record->cancellation()->exists()) {
+            $widgets[] = ServiceResource\Widgets\CancellationOverview::class;
+        }
+
+        return $widgets;
     }
 }
