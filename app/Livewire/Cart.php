@@ -84,7 +84,10 @@ class Cart extends Component
 
     public function removeProduct($index)
     {
-        ClassesCart::remove($index);
+        ClassesCart::removeLinkedHostingDomainItems(
+            (int) $index,
+        );
+
         $this->updateTotal();
     }
 

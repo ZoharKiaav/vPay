@@ -9,6 +9,7 @@ use App\Helpers\ExtensionHelper;
 use App\Livewire\Component;
 use App\Models\Category;
 use App\Models\Plan;
+use App\Services\HostingDomainCartPayloadBuilder;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use InvalidArgumentException;
@@ -456,16 +457,99 @@ class Checkout extends Component
             return;
         }
 
+        $existingCheckoutConfig = [];
+
+        if ($this->cartProductKey !== null) {
+            $existingCheckoutConfig = (array) (
+                Cart::get()
+                    ->items
+                    ->firstWhere(
+                        'id',
+                        (int) $this->cartProductKey,
+                    )
+                    ?->checkout_config
+                ?? []
+            );
+        }
+
+        $existingLinkId = trim((string) (
+            $existingCheckoutConfig[
+                HostingDomainCartPayloadBuilder::LINK_ID_KEY
+            ] ?? ''
+        ));
+
         $this->checkoutConfig = $checkoutConfig;
 
-        Cart::add(
-            $this->product,
-            $this->plan,
-            $configOptions,
-            $checkoutConfig,
-            key: $this->cartProductKey,
-        );
+        if (array_key_exists('domain_mode', $checkoutConfig)) {
+            try {
+                $payloads = app(
+                    HostingDomainCartPayloadBuilder::class,
+                )->build(
+                    $this->product,
+                    $this->plan,
+                    $configOptions->all(),
+                    $checkoutConfig,
+                    $existingLinkId !== ''
+                        ? $existingLinkId
+                        : null,
+                );
 
+                $registrarItemId = $existingLinkId !== ''
+                    ? Cart::linkedItemId(
+                        $existingLinkId,
+                        HostingDomainCartPayloadBuilder::ROLE_REGISTRAR,
+                        $this->cartProductKey !== null
+                            ? (int) $this->cartProductKey
+                            : null,
+                    )
+                    : null;
+
+                Cart::addLinkedHostingDomainItems(
+                    $payloads->hosting,
+                    $payloads->registrar,
+                    $this->cartProductKey !== null
+                        ? (int) $this->cartProductKey
+                        : null,
+                    $registrarItemId,
+                );
+
+                $this->checkoutConfig =
+                    $payloads->hosting['checkout_config'];
+            } catch (CheckoutExtensionException $exception) {
+                report($exception);
+
+                $this->addError(
+                    $exception->field,
+                    $exception->customerMessage,
+                );
+
+                return;
+            } catch (InvalidArgumentException $exception) {
+                $this->addError(
+                    'checkoutConfig.domain',
+                    $exception->getMessage(),
+                );
+
+                return;
+            } catch (\Throwable $exception) {
+                report($exception);
+
+                $this->addError(
+                    'checkoutConfig.domain',
+                    'The domain option could not be prepared. Please try again.',
+                );
+
+                return;
+            }
+        } else {
+            Cart::add(
+                $this->product,
+                $this->plan,
+                $configOptions,
+                $checkoutConfig,
+                key: $this->cartProductKey,
+            );
+        }
         $this->dispatch('cartUpdated');
 
         return $this->redirect(route('cart'), true);
