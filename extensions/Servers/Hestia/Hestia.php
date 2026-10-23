@@ -5,6 +5,7 @@ namespace Paymenter\Extensions\Servers\Hestia;
 use App\Classes\Extension\Server;
 use App\Models\Service;
 use App\Rules\Domain;
+use App\Services\HostingRegistrarProductResolver;
 use Exception;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -247,8 +248,20 @@ class Hestia extends Server
             $packageField['placeholder'] = 'vLite';
         }
 
+        $registrarProducts = app(
+            HostingRegistrarProductResolver::class,
+        )->options();
+
         return [
             $packageField,
+            [
+                'name' => 'registrar_product_id',
+                'type' => 'select',
+                'label' => 'Registrar product',
+                'description' => 'Domain product used when hosting checkout includes registration or transfer.',
+                'options' => $registrarProducts,
+                'required' => true,
+            ],
             [
                 'name' => 'create_domain',
                 'type' => 'checkbox',
