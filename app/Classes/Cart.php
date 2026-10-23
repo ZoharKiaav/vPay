@@ -3,6 +3,7 @@
 namespace App\Classes;
 
 use App\Exceptions\DisplayException;
+use App\Models\CartItem;
 use App\Models\Coupon;
 use App\Models\Plan;
 use App\Models\Product;
@@ -98,6 +99,257 @@ class Cart
 
         // Return index of the newly added item
         return $item->id;
+    }
+
+    /**
+     * Persist a hosting cart item and its optional registrar cart item
+     * as one atomic operation.
+     *
+     * @return array{hosting_item_id: int, registrar_item_id: ?int}
+     */
+    public static function addLinkedHostingDomainItems(
+        array $hosting,
+        ?array $registrar,
+        ?int $hostingKey = null,
+        ?int $registrarKey = null,
+    ): array {
+        self::checkRateLimit();
+
+        return DB::transaction(function () use (
+            $hosting,
+            $registrar,
+            $hostingKey,
+            $registrarKey,
+        ): array {
+            $existingItem = null;
+
+            if ($hostingKey !== null) {
+                $existingItem = CartItem::query()
+                    ->with('cart')
+                    ->find($hostingKey);
+            }
+
+            if ($existingItem === null && $registrarKey !== null) {
+                $existingItem = CartItem::query()
+                    ->with('cart')
+                    ->find($registrarKey);
+            }
+
+            $cart = $existingItem?->cart ?? self::createCart();
+
+            if (
+                $hostingKey !== null
+                && !$cart->items()->whereKey($hostingKey)->exists()
+            ) {
+                throw new \InvalidArgumentException(
+                    'The hosting cart item does not belong to the resolved cart.',
+                );
+            }
+
+            if (
+                $registrarKey !== null
+                && !$cart->items()->whereKey($registrarKey)->exists()
+            ) {
+                throw new \InvalidArgumentException(
+                    'The registrar cart item does not belong to the resolved cart.',
+                );
+            }
+
+            $requiredNewItems = 0;
+
+            if (
+                $hostingKey === null
+                || !$cart->items()->whereKey($hostingKey)->exists()
+            ) {
+                $requiredNewItems++;
+            }
+
+            if (
+                $registrar !== null
+                && (
+                    $registrarKey === null
+                    || !$cart->items()->whereKey($registrarKey)->exists()
+                )
+            ) {
+                $requiredNewItems++;
+            }
+
+            if (
+                $cart->items()->count() + $requiredNewItems
+                > self::DEFAULT_MAX_ITEMS
+            ) {
+                throw new DisplayException(
+                    'Your cart cannot contain more than '
+                    . self::DEFAULT_MAX_ITEMS
+                    . ' items.',
+                );
+            }
+
+            $hostingItem = $cart->items()->updateOrCreate(
+                ['id' => $hostingKey],
+                self::linkedItemAttributes($hosting),
+            );
+
+            $registrarItem = null;
+
+            if ($registrar !== null) {
+                $registrarItem = $cart->items()->updateOrCreate(
+                    ['id' => $registrarKey],
+                    self::linkedItemAttributes($registrar),
+                );
+            } elseif ($registrarKey !== null) {
+                $cart->items()
+                    ->whereKey($registrarKey)
+                    ->delete();
+            }
+
+            $cart->load(
+                'items.plan',
+                'items.product',
+                'items.product.configOptions.children.plans.prices',
+            );
+
+            if ($cart->coupon_id) {
+                try {
+                    self::validateCoupon($cart->coupon->code);
+
+                    if (
+                        $cart->items
+                            ->filter(
+                                fn ($item) => $item->price->hasDiscount(),
+                            )
+                            ->isEmpty()
+                    ) {
+                        $cart->coupon_id = null;
+                        $cart->save();
+                    }
+                } catch (DisplayException) {
+                    $cart->coupon_id = null;
+                    $cart->save();
+                }
+            }
+
+            return [
+                'hosting_item_id' => $hostingItem->id,
+                'registrar_item_id' => $registrarItem?->id,
+            ];
+        });
+    }
+
+    public static function linkedItemId(
+        string $linkId,
+        string $role,
+        ?int $exceptItemId = null,
+    ): ?int {
+        $linkId = trim($linkId);
+        $role = trim($role);
+
+        if ($linkId === '' || $role === '') {
+            return null;
+        }
+
+        return self::get()
+            ->items
+            ->when(
+                $exceptItemId !== null,
+                fn ($items) => $items->where('id', '!=', $exceptItemId),
+            )
+            ->first(function ($item) use ($linkId, $role): bool {
+                $config = (array) ($item->checkout_config ?? []);
+
+                return ($config['hosting_domain_link_id'] ?? null)
+                        === $linkId
+                    && ($config['hosting_domain_link_role'] ?? null)
+                        === $role;
+            })
+            ?->id;
+    }
+
+    public static function removeLinkedHostingDomainItems(
+        int $itemId,
+    ): void {
+        DB::transaction(function () use ($itemId): void {
+            $item = CartItem::query()
+                ->with('cart')
+                ->find($itemId);
+
+            if ($item === null) {
+                return;
+            }
+
+            $cart = $item->cart;
+            $config = (array) ($item->checkout_config ?? []);
+            $linkId = trim((string) (
+                $config['hosting_domain_link_id'] ?? ''
+            ));
+
+            if ($linkId === '') {
+                $item->delete();
+
+                return;
+            }
+
+            $cart->items()
+                ->get()
+                ->filter(function ($candidate) use ($linkId): bool {
+                    $candidateConfig = (array) (
+                        $candidate->checkout_config ?? []
+                    );
+
+                    return (
+                        $candidateConfig['hosting_domain_link_id']
+                            ?? null
+                    ) === $linkId;
+                })
+                ->each
+                ->delete();
+        });
+    }
+
+    private static function linkedItemAttributes(
+        array $payload,
+    ): array {
+        foreach ([
+            'product',
+            'plan',
+            'config_options',
+            'checkout_config',
+            'quantity',
+        ] as $requiredKey) {
+            if (!array_key_exists($requiredKey, $payload)) {
+                throw new \InvalidArgumentException(
+                    "Linked cart payload is missing {$requiredKey}.",
+                );
+            }
+        }
+
+        if (
+            !$payload['product'] instanceof Product
+            || !$payload['plan'] instanceof Plan
+        ) {
+            throw new \InvalidArgumentException(
+                'Linked cart payload product and plan are invalid.',
+            );
+        }
+
+        if (
+            (int) $payload['plan']->priceable_id
+            !== (int) $payload['product']->id
+            || $payload['plan']->priceable_type
+            !== $payload['product']::class
+        ) {
+            throw new \InvalidArgumentException(
+                'Linked cart plan does not belong to its product.',
+            );
+        }
+
+        return [
+            'product_id' => $payload['product']->id,
+            'plan_id' => $payload['plan']->id,
+            'config_options' => $payload['config_options'],
+            'checkout_config' => $payload['checkout_config'],
+            'quantity' => max(1, (int) $payload['quantity']),
+        ];
     }
 
     protected static function ensureCartItemLimit($cart, $key = null)
