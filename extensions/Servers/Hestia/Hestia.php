@@ -3,8 +3,11 @@
 namespace Paymenter\Extensions\Servers\Hestia;
 
 use App\Classes\Extension\Server;
+use App\Models\Product;
 use App\Models\Service;
 use App\Rules\Domain;
+use App\Services\HostingDomainCheckoutService;
+use App\Services\HostingDomainSelection;
 use App\Services\HostingRegistrarProductResolver;
 use Exception;
 use Illuminate\Http\Client\Response;
@@ -276,14 +279,54 @@ class Hestia extends Server
     {
         return [
             [
+                'name' => 'domain_mode',
+                'type' => 'select',
+                'label' => 'Domain option',
+                'required' => true,
+                'default' => HostingDomainSelection::MODE_REGISTER,
+                'options' => [
+                    HostingDomainSelection::MODE_REGISTER => 'Register a new domain',
+                    HostingDomainSelection::MODE_TRANSFER => 'Transfer an existing domain',
+                    HostingDomainSelection::MODE_EXTERNAL => 'Use a domain managed elsewhere',
+                ],
+            ],
+            [
+                'name' => 'domain_sld',
+                'type' => 'text',
+                'label' => 'Domain name',
+                'required' => false,
+                'placeholder' => 'example',
+            ],
+            [
+                'name' => 'domain_tld',
+                'type' => 'text',
+                'label' => 'Domain extension',
+                'required' => false,
+                'placeholder' => '.co.za',
+            ],
+            [
+                'name' => 'epp_code',
+                'type' => 'password',
+                'label' => 'Transfer authorisation code',
+                'required' => false,
+            ],
+            [
                 'name' => 'domain',
                 'type' => 'text',
-                'label' => 'Domain',
-                'required' => true,
-                'validation' => [new Domain, 'required'],
+                'label' => 'Existing domain',
+                'required' => false,
+                'validation' => [new Domain],
                 'placeholder' => 'example.com',
             ],
         ];
+    }
+
+    public function prepareCheckoutConfig(
+        Product $product,
+        array $config,
+    ): array {
+        return app(HostingDomainCheckoutService::class)
+            ->prepareConfig($product, $config);
     }
 
     public function createServer(Service $service, $settings, $properties)
