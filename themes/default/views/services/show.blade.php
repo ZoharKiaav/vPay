@@ -128,6 +128,84 @@
         </div>
     </div>
 
+    @php
+        $linkedService = $service->linkedDomainService
+            ?? $service->linkedHostingService;
+
+        $linkedServiceType = $service->linkedDomainService
+            ? 'Domain service'
+            : ($service->linkedHostingService
+                ? 'Hosting service'
+                : null);
+    @endphp
+
+    @if ($linkedService)
+        <div class="mt-4 rounded-xl border border-neutral bg-background-secondary p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex min-w-0 items-start gap-3">
+                    <div class="rounded-lg bg-secondary/10 p-2 text-secondary">
+                        <x-ri-links-line class="size-5" />
+                    </div>
+
+                    <div class="min-w-0">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-base/50">
+                            Linked service
+                        </p>
+
+                        <h2 class="mt-1 truncate text-lg font-semibold">
+                            {{ $linkedService->label }}
+                        </h2>
+
+                        <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                            <span class="rounded-full border border-neutral px-2.5 py-1 text-base/70">
+                                {{ $linkedServiceType }}
+                            </span>
+
+                            <span @class([
+                                'rounded-full px-2.5 py-1 font-medium',
+                                'bg-success/15 text-success' =>
+                                    $linkedService->status === 'active',
+                                'bg-inactive/15 text-inactive' =>
+                                    in_array(
+                                        $linkedService->status,
+                                        ['suspended', 'cancelled'],
+                                        true,
+                                    ),
+                                'bg-warning/15 text-warning' =>
+                                    !in_array(
+                                        $linkedService->status,
+                                        ['active', 'suspended', 'cancelled'],
+                                        true,
+                                    ),
+                            ])>
+                                {{ ucfirst(
+                                    str_replace(
+                                        '_',
+                                        ' ',
+                                        $linkedService->status,
+                                    ),
+                                ) }}
+                            </span>
+                        </div>
+
+                        <p class="mt-2 text-sm text-base/50">
+                            This service is managed as part of the same
+                            hosting and domain order.
+                        </p>
+                    </div>
+                </div>
+
+                <a href="{{ route('services.show', $linkedService) }}">
+                    wire:navigate
+                    class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-secondary/40 bg-secondary/10 px-4 py-2.5 text-sm font-semibold text-secondary transition-colors hover:bg-secondary/20 focus:outline-none focus:ring-2 focus:ring-secondary sm:w-auto"
+                >
+                    View linked service
+                    <x-ri-arrow-right-line class="size-4" />
+                </a>
+            </div>
+        </div>
+    @endif
+
     @if (count($views) > 0)
     <div class="bg-primary-800 rounded-lg mt-2">
         @if (count($views) > 1)
