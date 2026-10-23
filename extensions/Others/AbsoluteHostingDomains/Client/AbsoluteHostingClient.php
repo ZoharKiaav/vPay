@@ -57,6 +57,21 @@ class AbsoluteHostingClient
         return $this->request('GET', $action, $query);
     }
 
+    public function domainInformation(string $domain): mixed
+    {
+        $domain = strtolower(rtrim(trim($domain), '.'));
+
+        if ($domain === '') {
+            throw new AbsoluteHostingException(
+                'A domain is required to retrieve provider information.',
+            );
+        }
+
+        return $this->get(
+            '/domains/' . rawurlencode($domain) . '/information',
+        );
+    }
+
     public function registerDomain(array $payload): mixed
     {
         return $this->post('/order/domains/register', $payload);

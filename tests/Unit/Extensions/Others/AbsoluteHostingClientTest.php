@@ -101,6 +101,92 @@ class AbsoluteHostingClientTest extends TestCase
         });
     }
 
+    public function test_it_fetches_domain_information_read_only(): void
+    {
+        Http::preventStrayRequests();
+
+        Http::fake([
+            self::ENDPOINT . '/domains/example.co.za/information' => Http::response([
+                'domain' => 'example.co.za',
+                'status' => 'Active',
+                'expiryDate' => '2027-10-22',
+                'nameservers' => [
+                    'ns1.example.test',
+                    'ns2.example.test',
+                ],
+                'transferLock' => true,
+                'restorable' => false,
+                'registrantEmailAddress' => 'hidden@example.test',
+            ]),
+        ]);
+
+        $result = $this->client()->domainInformation(
+            '  Example.Co.Za.  ',
+        );
+
+        $this->assertSame('example.co.za', $result['domain']);
+        $this->assertSame('Active', $result['status']);
+        $this->assertSame('2027-10-22', $result['expiryDate']);
+        $this->assertTrue($result['transferLock']);
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'GET'
+                && $request->url()
+                    === self::ENDPOINT
+                        . '/domains/example.co.za/information'
+                && $request->data() === [];
+        });
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_domain_information_requires_a_domain(): void
+    {
+        Http::preventStrayRequests();
+
+        $this->expectException(AbsoluteHostingException::class);
+        $this->expectExceptionMessage(
+            'A domain is required to retrieve provider information.',
+        );
+
+        try {
+            $this->client()->domainInformation('   ');
+        } finally {
+            Http::assertNothingSent();
+        }
+    }
+
+    public function test_domain_information_encodes_the_path_parameter(): void
+    {
+        Http::preventStrayRequests();
+
+        Http::fake([
+            self::ENDPOINT
+                . '/domains/xn--bcher-kva.example/information' => Http::response([
+                    'domain' => 'xn--bcher-kva.example',
+                    'status' => 'Active',
+                ]),
+        ]);
+
+        $result = $this->client()->domainInformation(
+            'xn--bcher-kva.example',
+        );
+
+        $this->assertSame(
+            'xn--bcher-kva.example',
+            $result['domain'],
+        );
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'GET'
+                && $request->url()
+                    === self::ENDPOINT
+                        . '/domains/xn--bcher-kva.example/information';
+        });
+
+        Http::assertSentCount(1);
+    }
+
     public function test_it_normalises_api_errors(): void
     {
         Http::fake([
