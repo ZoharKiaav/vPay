@@ -195,7 +195,7 @@
                     </div>
                 </div>
 
-                <a href="{{ route('services.show', $linkedService) }}">
+                <a href="{{ route('services.show', $linkedService) }}"
                     wire:navigate
                     class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-secondary/40 bg-secondary/10 px-4 py-2.5 text-sm font-semibold text-secondary transition-colors hover:bg-secondary/20 focus:outline-none focus:ring-2 focus:ring-secondary sm:w-auto"
                 >

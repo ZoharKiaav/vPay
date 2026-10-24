@@ -133,6 +133,13 @@ class EditService extends EditRecord
             $widgets[] = ServiceResource\Widgets\RegistrarOrderOverview::class;
         }
 
+        if (
+            $this->record->linkedDomainService
+            || $this->record->linkedHostingService
+        ) {
+            $widgets[] = ServiceResource\Widgets\LinkedServiceOverview::class;
+        }
+
         if ($this->record->cancellation()->exists()) {
             $widgets[] = ServiceResource\Widgets\CancellationOverview::class;
         }
