@@ -95,7 +95,7 @@
                 @if ($configOption->name === 'domain_sld')
                     <div
                         id="registrar-domain-controls"
-                        class="registrar-domain-controls grid grid-cols-1 gap-4 rounded-lg border border-neutral bg-background-secondary/40 p-4 md:grid-cols-2"
+                        class="registrar-domain-controls grid grid-cols-1 gap-4 rounded-xl border border-neutral bg-background-secondary/40 p-4 shadow-sm sm:p-5 md:grid-cols-2"
                     >
                 @endif
 
@@ -117,16 +117,65 @@
                         </option>
                     @endforeach
                 @elseif($configOption->type == 'radio')
-                    @foreach ($configOption->options as $configOptionValue => $configOptionValueName)
-                        <div class="flex items-center gap-2">
-                            <input type="radio" id="{{ $configOptionValue }}" name="{{ $configOption->name }}"
-                                wire:model.live="checkoutConfig.{{ $configOption->name }}"
-                                value="{{ $configOptionValue }}" />
-                            <label for="{{ $configOptionValue }}">
-                                {{ $configOptionValueName }}
-                            </label>
+                    @if ($configOption->name === 'domain_action')
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            @foreach ($configOption->options as $configOptionValue => $configOptionValueName)
+                                @php
+                                    $domainActionSelected =
+                                        ($checkoutConfig[$configOption->name] ?? null)
+                                        === $configOptionValue;
+                                @endphp
+
+                                <label
+                                    for="domain-action-{{ $configOptionValue }}"
+                                    @class([
+                                        'flex cursor-pointer items-start gap-3 rounded-xl border p-4',
+                                        'border-secondary bg-secondary/10 ring-1 ring-secondary/30' => $domainActionSelected,
+                                        'border-neutral bg-background-secondary/40' => !$domainActionSelected,
+                                    ])
+                                >
+                                    <input
+                                        type="radio"
+                                        id="domain-action-{{ $configOptionValue }}"
+                                        name="{{ $configOption->name }}"
+                                        wire:model.live="checkoutConfig.{{ $configOption->name }}"
+                                        value="{{ $configOptionValue }}"
+                                        class="mt-1"
+                                    />
+
+                                    <span class="min-w-0">
+                                        <span class="block font-semibold text-primary-100">
+                                            {{ $configOptionValueName }}
+                                        </span>
+
+                                        <span class="mt-1 block text-sm text-primary-100/70">
+                                            @if ($configOptionValue === 'transfer')
+                                                Move an existing registration and link it to this hosting service.
+                                            @else
+                                                Register a new domain in the same order as this hosting service.
+                                            @endif
+                                        </span>
+                                    </span>
+                                </label>
+                            @endforeach
                         </div>
-                    @endforeach
+                    @else
+                        @foreach ($configOption->options as $configOptionValue => $configOptionValueName)
+                            <div class="flex items-center gap-2">
+                                <input
+                                    type="radio"
+                                    id="{{ $configOptionValue }}"
+                                    name="{{ $configOption->name }}"
+                                    wire:model.live="checkoutConfig.{{ $configOption->name }}"
+                                    value="{{ $configOptionValue }}"
+                                />
+
+                                <label for="{{ $configOptionValue }}">
+                                    {{ $configOptionValueName }}
+                                </label>
+                            </div>
+                        @endforeach
+                    @endif
                 @endif
                 </x-form.configoption>
                 </div>
@@ -216,7 +265,7 @@
             @endif
         @endforeach
     </div>
-    <div class="flex flex-col gap-3 w-full col-span-1 rounded-lg border border-neutral bg-background-secondary p-4 h-fit md:sticky md:top-6">
+    <div class="flex h-fit w-full flex-col gap-3 rounded-xl border border-neutral bg-background-secondary p-4 shadow-sm md:sticky md:top-6 md:col-span-1">
         <h2 class="text-2xl font-semibold  mb-2">
             {{ __('product.order_summary') }}
         </h2>

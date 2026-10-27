@@ -7,9 +7,9 @@
             </h1>
             @endif
             @foreach (Cart::items() as $item)
-            <div class="flex flex-row justify-between w-full bg-background-secondary p-3 rounded-md border border-neutral">
-                <div class="flex flex-col gap-1">
-                    <h2 class="text-2xl font-semibold">
+            <div class="flex w-full flex-col justify-between gap-4 rounded-xl border border-neutral bg-background-secondary p-4 shadow-sm sm:flex-row">
+                <div class="min-w-0 flex-1">
+                    <h2 class="break-words text-xl font-semibold sm:text-2xl">
                         {{ $item->product->name }}
                     </h2>
                     @if (count($item->config_options) > 0)
@@ -27,6 +27,17 @@
 
                     @php
                         $checkoutConfig = (array) ($item->checkout_config ?? []);
+
+                        $linkedRole = trim((string) (
+                            $checkoutConfig['hosting_domain_link_role']
+                                ?? ''
+                        ));
+
+                        $linkedLabel = match ($linkedRole) {
+                            'hosting' => 'Hosting service',
+                            'registrar' => 'Domain service',
+                            default => null,
+                        };
 
                         $domainSld = trim((string) (
                             $checkoutConfig['domain_sld'] ?? ''
@@ -78,8 +89,20 @@
                         )->filter()->values();
                     @endphp
 
+                    @if ($linkedLabel !== null)
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <span class="rounded-full border border-secondary/30 bg-secondary/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-primary-100/80">
+                                {{ $linkedLabel }}
+                            </span>
+
+                            <span class="text-xs text-primary-100/60">
+                                Linked purchase
+                            </span>
+                        </div>
+                    @endif
+
                     @if ($isDomainItem)
-                    <div class="mt-3 rounded-md border border-neutral bg-background px-3 py-3">
+                    <div class="mt-3 rounded-lg border border-neutral bg-background px-4 py-3">
                         <div class="text-xs font-semibold uppercase tracking-wide text-primary-100/60">
                             Domain details
                         </div>
@@ -140,7 +163,7 @@
                     </div>
                     @endif
                 </div>
-                <div class="flex flex-col justify-between items-end gap-4">
+                <div class="flex shrink-0 flex-col justify-between gap-4 sm:items-end">
                     <h3 class="text-xl font-semibold p-1">
                         {{ $item->price->format($item->price->total * $item->quantity) }} @if ($item->quantity > 1)
                         ({{ $item->price }} each)

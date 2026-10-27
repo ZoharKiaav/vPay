@@ -155,6 +155,46 @@ class Service extends Model implements Auditable
         return $this->belongsTo(Plan::class);
     }
 
+    public function hostingDomainLink()
+    {
+        return $this->hasOne(
+            HostingDomainServiceLink::class,
+            'hosting_service_id',
+        );
+    }
+
+    public function domainHostingLink()
+    {
+        return $this->hasOne(
+            HostingDomainServiceLink::class,
+            'domain_service_id',
+        );
+    }
+
+    public function linkedDomainService()
+    {
+        return $this->hasOneThrough(
+            Service::class,
+            HostingDomainServiceLink::class,
+            'hosting_service_id',
+            'id',
+            'id',
+            'domain_service_id',
+        );
+    }
+
+    public function linkedHostingService()
+    {
+        return $this->hasOneThrough(
+            Service::class,
+            HostingDomainServiceLink::class,
+            'domain_service_id',
+            'id',
+            'id',
+            'hosting_service_id',
+        );
+    }
+
     /**
      * Get the service's configurations.
      */
