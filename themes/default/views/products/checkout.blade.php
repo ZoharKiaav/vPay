@@ -308,8 +308,64 @@
                 <h4>{{ \App\Classes\Settings::tax()->name }} ({{ \App\Classes\Settings::tax()->rate }}%):</h4> {{ $total->formatted->total_tax }}
             </div>
         @endif
-        <div class="text-lg font-semibold flex justify-between">
-            <h4>{{ __('product.total_today') }}:</h4> {{ $total }}
+        <div class="space-y-3 rounded-lg border border-neutral bg-background px-3 py-3">
+            <div class="flex justify-between gap-4">
+                <div>
+                    <div class="font-semibold text-primary-100">
+                        Hosting
+                    </div>
+                    <div class="text-xs text-primary-100/65">
+                        {{ $plan->billing_period }}
+                        {{ trans_choice(
+                            __('services.billing_cycles.' . $plan->billing_unit),
+                            $plan->billing_period,
+                        ) }}
+                    </div>
+                </div>
+
+                <div class="font-semibold text-primary-100">
+                    {{ $hostingTotal }}
+                </div>
+            </div>
+
+            @if (
+                ($checkoutConfig['domain_mode'] ?? null)
+                    !== 'external'
+                && $domainTotal->price > 0
+            )
+                <div class="flex justify-between gap-4 border-t border-neutral pt-3">
+                    <div>
+                        <div class="font-semibold text-primary-100">
+                            Domain
+                        </div>
+                        <div class="text-xs text-primary-100/65">
+                            {{ max(
+                                1,
+                                (int) (
+                                    $checkoutConfig['registration_period']
+                                        ?? 1
+                                ),
+                            ) }}
+                            {{ max(
+                                1,
+                                (int) (
+                                    $checkoutConfig['registration_period']
+                                        ?? 1
+                                ),
+                            ) === 1 ? 'year' : 'years' }}
+                        </div>
+                    </div>
+
+                    <div class="font-semibold text-primary-100">
+                        {{ $domainTotal }}
+                    </div>
+                </div>
+            @endif
+        </div>
+
+        <div class="text-lg font-semibold flex justify-between border-t border-neutral pt-3">
+            <h4>{{ __('product.total_today') }}:</h4>
+            {{ $total }}
         </div>
         @if ($total->setup_fee > 0 && $plan->type == 'recurring')
             <div class="text- font-semibold flex justify-between ">
@@ -324,10 +380,18 @@
                 class="rounded-md border border-secondary/40 bg-secondary/10 px-3 py-2 text-sm text-primary-100"
             >
                 <div class="font-semibold">
-                    Checking domain availabilityâ€¦
+                    @if (($checkoutConfig['domain_mode'] ?? null) === 'external')
+                        Preparing hosting selection...
+                    @else
+                        Checking domain availability...
+                    @endif
                 </div>
                 <div class="mt-1 text-primary-100/75">
-                    Confirming the selected domain and preparing the final cart price.
+                    @if (($checkoutConfig['domain_mode'] ?? null) === 'external')
+                        Confirming the existing domain and preparing the cart.
+                    @else
+                        Confirming the selected domain and preparing the final cart price.
+                    @endif
                 </div>
             </div>
 
@@ -335,7 +399,9 @@
                 <x-button.primary wire:click="checkout" wire:loading.attr="disabled">
                     <x-loading target="checkout" />
                     <div wire:loading.remove wire:target="checkout">
-                        @if (($checkoutConfig['domain_action'] ?? 'register') === 'transfer')
+                        @if (($checkoutConfig['domain_mode'] ?? null) === 'external')
+                            Continue with existing domain
+                        @elseif (($checkoutConfig['domain_mode'] ?? null) === 'transfer')
                             Continue with domain transfer
                         @else
                             Check availability and continue
