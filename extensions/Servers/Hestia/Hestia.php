@@ -3,6 +3,7 @@
 namespace Paymenter\Extensions\Servers\Hestia;
 
 use App\Classes\Extension\Server;
+use App\Helpers\ExtensionHelper;
 use App\Models\Product;
 use App\Models\Service;
 use App\Rules\Domain;
@@ -275,50 +276,156 @@ class Hestia extends Server
         ];
     }
 
-    public function getCheckoutConfig()
-    {
-        return [
+    public function getCheckoutConfig(
+        Product $product,
+        array $values = [],
+    ): array {
+        $modeOptions = [
+            HostingDomainSelection::MODE_REGISTER =>
+                'Register a new domain',
+            HostingDomainSelection::MODE_TRANSFER =>
+                'Transfer an existing domain',
+            HostingDomainSelection::MODE_EXTERNAL =>
+                'Use a domain managed elsewhere',
+        ];
+
+        $mode = strtolower(trim((string) (
+            $values['domain_mode']
+                ?? HostingDomainSelection::MODE_REGISTER
+        )));
+
+        if (!array_key_exists($mode, $modeOptions)) {
+            $mode = HostingDomainSelection::MODE_REGISTER;
+        }
+
+        $fields = [
             [
                 'name' => 'domain_mode',
                 'type' => 'select',
                 'label' => 'Domain option',
                 'required' => true,
-                'default' => HostingDomainSelection::MODE_REGISTER,
-                'options' => [
-                    HostingDomainSelection::MODE_REGISTER => 'Register a new domain',
-                    HostingDomainSelection::MODE_TRANSFER => 'Transfer an existing domain',
-                    HostingDomainSelection::MODE_EXTERNAL => 'Use a domain managed elsewhere',
-                ],
+                'default' => $mode,
+                'options' => $modeOptions,
             ],
-            [
-                'name' => 'domain_sld',
-                'type' => 'text',
-                'label' => 'Domain name',
-                'required' => false,
-                'placeholder' => 'example',
-            ],
-            [
-                'name' => 'domain_tld',
-                'type' => 'text',
-                'label' => 'Domain extension',
-                'required' => false,
-                'placeholder' => '.co.za',
-            ],
-            [
-                'name' => 'epp_code',
-                'type' => 'password',
-                'label' => 'Transfer authorisation code',
-                'required' => false,
-            ],
-            [
+        ];
+
+        if ($mode === HostingDomainSelection::MODE_EXTERNAL) {
+            $fields[] = [
                 'name' => 'domain',
                 'type' => 'text',
                 'label' => 'Existing domain',
-                'required' => false,
-                'validation' => [new Domain],
+                'required' => true,
+                'validation' => [
+                    'required',
+                    new Domain,
+                ],
                 'placeholder' => 'example.com',
+            ];
+
+            return $fields;
+        }
+
+        $registrarProduct = app(
+            HostingRegistrarProductResolver::class,
+        )->resolve($product);
+
+        $registrarValues = $values;
+        $registrarValues['domain_action'] = $mode;
+
+        $registrarFields = ExtensionHelper::getCheckoutConfig(
+            $registrarProduct,
+            $registrarValues,
+        );
+
+        foreach ($registrarFields as $field) {
+            if (
+                ($field['name'] ?? null)
+                === 'domain_action'
+            ) {
+                continue;
+            }
+
+            $fields[] = $field;
+        }
+
+        return $fields;
+    }
+
+    public function checkoutPrice(
+        array $values = [],
+        array $settings = [],
+    ): float {
+        $mode = strtolower(trim((string) (
+            $values['domain_mode'] ?? ''
+        )));
+
+        if ($mode === HostingDomainSelection::MODE_EXTERNAL) {
+            return 0.0;
+        }
+
+        if (!in_array(
+            $mode,
+            [
+                HostingDomainSelection::MODE_REGISTER,
+                HostingDomainSelection::MODE_TRANSFER,
             ],
-        ];
+            true,
+        )) {
+            return 0.0;
+        }
+
+        $registrarProductId = filter_var(
+            $settings[
+                HostingRegistrarProductResolver::SETTING_KEY
+            ] ?? null,
+            FILTER_VALIDATE_INT,
+            [
+                'options' => [
+                    'min_range' => 1,
+                ],
+            ],
+        );
+
+        if ($registrarProductId === false) {
+            throw new \LogicException(
+                'No registrar product is configured for this hosting product.',
+            );
+        }
+
+        $registrarProduct = Product::query()
+            ->with('server')
+            ->find($registrarProductId);
+
+        if ($registrarProduct === null) {
+            throw new \LogicException(
+                'The configured registrar product no longer exists.',
+            );
+        }
+
+        if (
+            $registrarProduct->server === null
+            || $registrarProduct->server->extension
+                !== HostingRegistrarProductResolver::REGISTRAR_EXTENSION
+            || !$registrarProduct->server->enabled
+        ) {
+            throw new \LogicException(
+                'The configured registrar product is unavailable.',
+            );
+        }
+
+        $registrarValues = $values;
+        $registrarValues['domain_action'] = $mode;
+
+        return ExtensionHelper::getCheckoutPrice(
+            $registrarProduct,
+            $registrarValues,
+        );
+    }
+
+    public function checkoutPriceLabel(
+        Product $product,
+    ): string {
+        return 'Domain';
     }
 
     public function prepareCheckoutConfig(

@@ -31,6 +31,12 @@ class Checkout extends Component
     #[Locked]
     public $total;
 
+    #[Locked]
+    public $hostingTotal;
+
+    #[Locked]
+    public $domainTotal;
+
     public $setup_fee;
 
     #[Url(keep: true, as: 'options')]
@@ -126,8 +132,18 @@ class Checkout extends Component
             $setup_fee += $option->children->where('id', $this->configOptions[$option->id])->first()?->price(billing_period: $this->plan->billing_period, billing_unit: $this->plan->billing_unit)->setup_fee;
         });
 
+        $currency = $this->plan->price()->currency;
+
+        $this->hostingTotal = new Price([
+            'price' => $total,
+            'currency' => $currency,
+            'setup_fee' => $setup_fee,
+        ], apply_exclusive_tax: true);
+
+        $domainPrice = 0.0;
+
         try {
-            $total += ExtensionHelper::getCheckoutPrice(
+            $domainPrice = ExtensionHelper::getCheckoutPrice(
                 $this->product,
                 (array) $this->checkoutConfig,
             );
@@ -149,9 +165,15 @@ class Checkout extends Component
             );
         }
 
+        $this->domainTotal = new Price([
+            'price' => $domainPrice,
+            'currency' => $currency,
+            'setup_fee' => 0,
+        ], apply_exclusive_tax: true);
+
         $this->total = new Price([
-            'price' => $total,
-            'currency' => $this->plan->price()->currency,
+            'price' => $total + $domainPrice,
+            'currency' => $currency,
             'setup_fee' => $setup_fee,
         ], apply_exclusive_tax: true);
     }
@@ -225,8 +247,38 @@ class Checkout extends Component
             }
         }
 
-        if ($key === 'domain_action' && $value !== 'transfer') {
+        if (
+            in_array(
+                $key,
+                ['domain_action', 'domain_mode'],
+                true,
+            )
+            && $value !== 'transfer'
+        ) {
             $this->checkoutConfig['epp_code'] = null;
+        }
+
+        if ($key === 'domain_mode') {
+            $this->resetValidation();
+
+            if ($value === 'external') {
+                foreach ([
+                    'domain_sld',
+                    'domain_tld',
+                    'registration_period',
+                    'use_custom_nameservers',
+                    'nameserver_1',
+                    'nameserver_2',
+                    'nameserver_3',
+                    'nameserver_4',
+                    'nameserver_5',
+                    'epp_code',
+                ] as $managedKey) {
+                    unset($this->checkoutConfig[$managedKey]);
+                }
+            } else {
+                unset($this->checkoutConfig['domain']);
+            }
         }
 
         if ($key === 'domain_tld') {

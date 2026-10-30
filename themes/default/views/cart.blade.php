@@ -39,6 +39,51 @@
                             default => null,
                         };
 
+                        $linkId = trim((string) (
+                            $checkoutConfig['hosting_domain_link_id']
+                                ?? ''
+                        ));
+
+                        $editItem = $item;
+
+                        if (
+                            $linkedRole === 'registrar'
+                            && $linkId !== ''
+                        ) {
+                            $linkedHostingItem = Cart::items()
+                                ->first(function (
+                                    $candidate,
+                                ) use ($linkId): bool {
+                                    $candidateConfig = (array) (
+                                        $candidate->checkout_config ?? []
+                                    );
+
+                                    return (
+                                        $candidateConfig[
+                                            'hosting_domain_link_id'
+                                        ] ?? null
+                                    ) === $linkId
+                                        && (
+                                            $candidateConfig[
+                                                'hosting_domain_link_role'
+                                            ] ?? null
+                                        ) === 'hosting';
+                                });
+
+                            if ($linkedHostingItem !== null) {
+                                $editItem = $linkedHostingItem;
+                            }
+                        }
+
+                        $editUrl = route(
+                            'products.checkout',
+                            [
+                                $editItem->product->category,
+                                $editItem->product,
+                                'edit' => $editItem->id,
+                            ],
+                        );
+
                         $domainSld = trim((string) (
                             $checkoutConfig['domain_sld'] ?? ''
                         ));
@@ -185,7 +230,7 @@
                             </x-button.secondary>
                         </div>
                         @endif
-                        <a href="{{ route('products.checkout', [$item->product->category, $item->product, 'edit' => $item->id]) }}"
+                        <a href="{{ $editUrl }}"
                             wire:navigate>
                             <x-button.primary class="h-fit w-fit">
                                 {{ __('product.edit') }}
