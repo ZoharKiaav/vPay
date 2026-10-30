@@ -322,6 +322,8 @@ class Checkout extends Component
             $validationRules = [];
             if ($config['required'] ?? false) {
                 $validationRules[] = 'required';
+            } else {
+                $validationRules[] = 'nullable';
             }
             if (isset($config['type'])) {
                 switch ($config['type']) {
