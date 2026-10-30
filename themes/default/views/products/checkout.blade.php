@@ -68,8 +68,39 @@
             </x-form.configoption>
         @endforeach
         @foreach ($this->getCheckoutConfig() as $configOption)
-            @php $configOption = (object) $configOption; @endphp
-            @if ($configOption->visible ?? true)
+            @php
+                $configOption = (object) $configOption;
+
+                $domainMode = (string) (
+                    $checkoutConfig['domain_mode'] ?? ''
+                );
+
+                $domainAction = (string) (
+                    $checkoutConfig['domain_action'] ?? 'register'
+                );
+
+                $configOptionVisible =
+                    $configOption->visible ?? true;
+
+                if (
+                    $configOption->name === 'domain'
+                    && $domainMode !== 'external'
+                ) {
+                    $configOptionVisible = false;
+                }
+
+                if (
+                    $configOption->name === 'epp_code'
+                    && !(
+                        $domainMode === 'transfer'
+                        || $domainAction === 'transfer'
+                    )
+                ) {
+                    $configOptionVisible = false;
+                }
+            @endphp
+
+            @if ($configOptionVisible)
                 @if ($configOption->name === 'use_custom_nameservers')
                     <div class="mt-3 rounded-lg border border-neutral bg-background-secondary/40 px-4 py-4">
                         <h2 class="text-lg font-semibold text-primary-100">
@@ -293,7 +324,7 @@
                 class="rounded-md border border-secondary/40 bg-secondary/10 px-3 py-2 text-sm text-primary-100"
             >
                 <div class="font-semibold">
-                    Checking domain availability…
+                    Checking domain availabilityâ€¦
                 </div>
                 <div class="mt-1 text-primary-100/75">
                     Confirming the selected domain and preparing the final cart price.
