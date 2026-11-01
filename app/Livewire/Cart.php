@@ -138,7 +138,11 @@ class Cart extends Component
                 $product = Product::where('id', $item->product->id)->lockForUpdate()->first();
 
                 if ($product->per_user_limit > 0) {
-                    $existingServiceCount = $user->services()->where('product_id', $product->id)->count();
+                    $existingServiceCount =
+                        $this->existingServiceCountForProduct(
+                            $user,
+                            $product,
+                        );
                     $cartQuantityForProduct = $cart->items->filter(fn ($it) => $it->product->id == $product->id)->sum(fn ($it) => $it->quantity);
 
                     if ($existingServiceCount >= $product->per_user_limit || ($cartQuantityForProduct + $existingServiceCount) > $product->per_user_limit) {
@@ -276,6 +280,20 @@ class Cart extends Component
         }
     }
 
+    protected function existingServiceCountForProduct(
+        User $user,
+        Product $product,
+    ): int {
+        return $user
+            ->services()
+            ->where('product_id', $product->id)
+            ->where(
+                'status',
+                '!=',
+                Service::STATUS_CANCELLED,
+            )
+            ->count();
+    }
     public function render()
     {
         return view('cart');

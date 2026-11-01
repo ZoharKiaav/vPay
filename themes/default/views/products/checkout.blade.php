@@ -317,7 +317,7 @@
                     <div class="text-xs text-primary-100/65">
                         {{ $plan->billing_period }}
                         {{ trans_choice(
-                            __('services.billing_cycles.' . $plan->billing_unit),
+                            'services.billing_cycles.' . $plan->billing_unit,
                             $plan->billing_period,
                         ) }}
                     </div>
@@ -369,7 +369,7 @@
         </div>
         @if ($total->setup_fee > 0 && $plan->type == 'recurring')
             <div class="text- font-semibold flex justify-between ">
-                <h4>{{ __('product.then_after_x', ['time' => $plan->billing_period . ' ' . trans_choice(__('services.billing_cycles.' . $plan->billing_unit), $plan->billing_period)]) }}:
+                <h4>{{ __('product.then_after_x', ['time' => $plan->billing_period . ' ' . trans_choice('services.billing_cycles.' . $plan->billing_unit, $plan->billing_period)]) }}:
                 </h4> {{ $total->format($total->price) }}
             </div>
         @endif
