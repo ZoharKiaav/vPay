@@ -315,23 +315,19 @@
                         Hosting
                     </div>
                     <div class="text-xs text-primary-100/65">
-                        {{ $plan->billing_period }}
-                        {{ trans_choice(
-                            'services.billing_cycles.' . $plan->billing_unit,
-                            $plan->billing_period,
-                        ) }}
+                        {{ $hostingCycleLabel }}
                     </div>
                 </div>
 
                 <div class="font-semibold text-primary-100">
-                    {{ $hostingTotal }}
+                    {{ $hostingAmount }}
                 </div>
             </div>
 
             @if (
                 ($checkoutConfig['domain_mode'] ?? null)
                     !== 'external'
-                && $domainTotal->price > 0
+                && $domainAmountValue > 0
             )
                 <div class="flex justify-between gap-4 border-t border-neutral pt-3">
                     <div>
@@ -357,7 +353,7 @@
                     </div>
 
                     <div class="font-semibold text-primary-100">
-                        {{ $domainTotal }}
+                        {{ $domainAmount }}
                     </div>
                 </div>
             @endif

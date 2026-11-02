@@ -37,6 +37,18 @@ class Checkout extends Component
     #[Locked]
     public $domainTotal;
 
+    #[Locked]
+    public string $hostingAmount = '';
+
+    #[Locked]
+    public string $hostingCycleLabel = '';
+
+    #[Locked]
+    public string $domainAmount = '';
+
+    #[Locked]
+    public float $domainAmountValue = 0.0;
+
     public $setup_fee;
 
     #[Url(keep: true, as: 'options')]
@@ -140,6 +152,18 @@ class Checkout extends Component
             'setup_fee' => $setup_fee,
         ], apply_exclusive_tax: true);
 
+        $this->hostingAmount =
+            $this->hostingTotal->formatted->total;
+
+        $this->hostingCycleLabel =
+            $this->plan->billing_period
+            . ' '
+            . trans_choice(
+                'services.billing_cycles.'
+                    . $this->plan->billing_unit,
+                $this->plan->billing_period,
+            );
+
         $domainPrice = 0.0;
 
         try {
@@ -170,6 +194,12 @@ class Checkout extends Component
             'currency' => $currency,
             'setup_fee' => 0,
         ], apply_exclusive_tax: true);
+
+        $this->domainAmount =
+            $this->domainTotal->formatted->total;
+
+        $this->domainAmountValue =
+            (float) $this->domainTotal->price;
 
         $this->total = new Price([
             'price' => $total + $domainPrice,
