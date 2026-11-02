@@ -52,13 +52,38 @@ class LinkedPaidProvisioningServiceTest extends TestCase
         );
 
         $this->assertSame(
-            Service::STATUS_ACTIVE,
+            Service::STATUS_PENDING,
             $domainService->fresh()->status,
         );
 
         $this->assertSame(
-            Service::STATUS_ACTIVE,
+            Service::STATUS_PENDING,
             $hostingService->fresh()->status,
+        );
+
+        $this->assertDatabaseHas(
+            'properties',
+            [
+                'model_type' => Service::class,
+                'model_id' => $domainService->id,
+                'key' => 'linked_provisioning_dispatched',
+            ],
+        );
+
+        $this->assertDatabaseHas(
+            'properties',
+            [
+                'model_type' => Service::class,
+                'model_id' => $hostingService->id,
+                'key' => 'linked_provisioning_dispatched',
+            ],
+        );
+
+        Queue::assertPushed(
+            CreateJob::class,
+            fn (CreateJob $job): bool =>
+                $job->service->is($domainService)
+                && $job->activateOnSuccess,
         );
     }
 

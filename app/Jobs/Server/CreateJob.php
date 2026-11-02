@@ -2,10 +2,9 @@
 
 namespace App\Jobs\Server;
 
-use App\Helpers\ExtensionHelper;
 use App\Helpers\NotificationHelper;
 use App\Models\Service;
-use Exception;
+use App\Services\Service\ServerProvisioningService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -23,25 +22,43 @@ class CreateJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(public Service $service, public $sendNotification = true) {}
+    public function __construct(
+        public Service $service,
+        public $sendNotification = true,
+        public bool $activateOnSuccess = false,
+    ) {}
 
     /**
      * Execute the job.
      */
-    public function handle(): void
-    {
-        $data = [];
-        // $data is the data that will be used to send the email, data is coming from the extension itself
-        try {
-            $data = ExtensionHelper::createServer($this->service);
-        } catch (Exception $e) {
-            if ($e->getMessage() !== 'No server assigned to this product') {
-                throw $e;
-            }
+    public function handle(
+        ServerProvisioningService $provisioner,
+    ): void {
+        $service = $this->service->fresh();
+
+        if (
+            $this->activateOnSuccess
+            && $service->status === Service::STATUS_ACTIVE
+        ) {
+            return;
+        }
+
+        $data = $provisioner->create($service);
+
+        if ($this->activateOnSuccess) {
+            $service->expires_at =
+                $service->calculateNextDueDate();
+
+            $service->status = Service::STATUS_ACTIVE;
+            $service->save();
         }
 
         if ($this->sendNotification) {
-            NotificationHelper::serverCreatedNotification($this->service->user, $this->service, is_array($data) ? $data : []);
+            NotificationHelper::serverCreatedNotification(
+                $service->user,
+                $service,
+                is_array($data) ? $data : [],
+            );
         }
     }
 }

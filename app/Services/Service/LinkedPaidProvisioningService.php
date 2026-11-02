@@ -7,14 +7,19 @@ use App\Models\HostingDomainServiceLink;
 use App\Models\Service;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Bus;
+use Throwable;
 
 class LinkedPaidProvisioningService
 {
+    private const DISPATCH_PROPERTY =
+        'linked_provisioning_dispatched';
+
     public function handle(Collection $services): void
     {
         $services = $services
             ->filter(
-                static fn (mixed $service): bool => $service instanceof Service,
+                static fn (mixed $service): bool =>
+                    $service instanceof Service,
             )
             ->keyBy('id');
 
@@ -79,21 +84,64 @@ class LinkedPaidProvisioningService
             return;
         }
 
-        Bus::chain([
-            new CreateJob($domainService),
-            new CreateJob($hostingService),
-        ])->dispatch();
+        if (
+            $this->wasDispatched($domainService)
+            || $this->wasDispatched($hostingService)
+        ) {
+            return;
+        }
 
-        $this->activate($domainService);
-        $this->activate($hostingService);
+        $this->reserveDispatch($domainService);
+        $this->reserveDispatch($hostingService);
+
+        try {
+            Bus::chain([
+                new CreateJob(
+                    service: $domainService,
+                    activateOnSuccess: true,
+                ),
+                new CreateJob(
+                    service: $hostingService,
+                    activateOnSuccess: true,
+                ),
+            ])->dispatch();
+        } catch (Throwable $exception) {
+            $this->releaseDispatch($domainService);
+            $this->releaseDispatch($hostingService);
+
+            throw $exception;
+        }
     }
 
-    private function activate(Service $service): void
-    {
-        $service->expires_at =
-            $service->calculateNextDueDate();
+    private function wasDispatched(
+        Service $service,
+    ): bool {
+        return $service
+            ->properties()
+            ->where('key', self::DISPATCH_PROPERTY)
+            ->exists();
+    }
 
-        $service->status = Service::STATUS_ACTIVE;
-        $service->save();
+    private function reserveDispatch(
+        Service $service,
+    ): void {
+        $service->properties()->updateOrCreate(
+            [
+                'key' => self::DISPATCH_PROPERTY,
+            ],
+            [
+                'name' => 'Linked provisioning dispatched',
+                'value' => now()->toIso8601String(),
+            ],
+        );
+    }
+
+    private function releaseDispatch(
+        Service $service,
+    ): void {
+        $service
+            ->properties()
+            ->where('key', self::DISPATCH_PROPERTY)
+            ->delete();
     }
 }
