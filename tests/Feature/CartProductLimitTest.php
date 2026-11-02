@@ -53,8 +53,25 @@ class CartProductLimitTest extends TestCase
 
         self::assertIsString($source);
         self::assertSame(
-            2,
+            1,
             substr_count($source, "'services.billing_cycles.'"),
+        );
+
+        $checkoutSource = file_get_contents(
+            dirname(__DIR__, 2)
+            . '/app/Livewire/Products/Checkout.php',
+        );
+
+        self::assertIsString($checkoutSource);
+
+        self::assertStringContainsString(
+            "'services.billing_cycles.'",
+            $checkoutSource,
+        );
+
+        self::assertStringContainsString(
+            '$this->hostingCycleLabel',
+            $checkoutSource,
         );
         self::assertStringNotContainsString(
             "__('services.billing_cycles.'",
