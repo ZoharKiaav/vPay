@@ -106,13 +106,31 @@ class LinkedPaidInvoiceIntegrationTest extends TestCase
         );
 
         $this->assertSame(
-            Service::STATUS_ACTIVE,
+            Service::STATUS_PENDING,
             $domainService->fresh()->status,
         );
 
         $this->assertSame(
-            Service::STATUS_ACTIVE,
+            Service::STATUS_PENDING,
             $hostingService->fresh()->status,
+        );
+
+        $this->assertDatabaseHas(
+            'properties',
+            [
+                'model_type' => Service::class,
+                'model_id' => $domainService->id,
+                'key' => 'linked_provisioning_dispatched',
+            ],
+        );
+
+        $this->assertDatabaseHas(
+            'properties',
+            [
+                'model_type' => Service::class,
+                'model_id' => $hostingService->id,
+                'key' => 'linked_provisioning_dispatched',
+            ],
         );
 
         Http::assertNothingSent();
@@ -142,13 +160,31 @@ class LinkedPaidInvoiceIntegrationTest extends TestCase
         Queue::assertPushed(CreateJob::class, 1);
 
         $this->assertSame(
-            Service::STATUS_ACTIVE,
+            Service::STATUS_PENDING,
             $domainService->fresh()->status,
         );
 
         $this->assertSame(
-            Service::STATUS_ACTIVE,
+            Service::STATUS_PENDING,
             $hostingService->fresh()->status,
+        );
+
+        $this->assertDatabaseHas(
+            'properties',
+            [
+                'model_type' => Service::class,
+                'model_id' => $domainService->id,
+                'key' => 'linked_provisioning_dispatched',
+            ],
+        );
+
+        $this->assertDatabaseHas(
+            'properties',
+            [
+                'model_type' => Service::class,
+                'model_id' => $hostingService->id,
+                'key' => 'linked_provisioning_dispatched',
+            ],
         );
 
         Http::assertNothingSent();
