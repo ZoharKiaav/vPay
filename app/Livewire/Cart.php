@@ -7,6 +7,7 @@ use App\Classes\Price;
 use App\Exceptions\DisplayException;
 use App\Helpers\ExtensionHelper;
 use App\Jobs\Server\CreateJob;
+use App\Models\HostingDomainServiceLink;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -16,6 +17,7 @@ use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Locked;
+use LogicException;
 
 class Cart extends Component
 {
@@ -176,6 +178,8 @@ class Cart extends Component
             }
 
             // Create the services
+            $linkedServices = [];
+
             foreach ($cart->items as $item) {
                 // Is it a lifetime coupon, then we can adjust the price of the service
                 if (is_object($this->coupon) && ($this->coupon->recurring === null || (int) $this->coupon->recurring == 1)) {
@@ -206,6 +210,63 @@ class Cart extends Component
                     ], [
                         'value' => $value,
                     ]);
+                }
+
+                $checkoutConfig = (array) $item->checkout_config;
+
+                $linkId = trim((string) (
+                    $checkoutConfig[
+                        'hosting_domain_link_id'
+                    ] ?? ''
+                ));
+
+                $linkRole = trim((string) (
+                    $checkoutConfig[
+                        'hosting_domain_link_role'
+                    ] ?? ''
+                ));
+
+                if ($linkId !== '' || $linkRole !== '') {
+                    if ($linkId === '' || $linkRole === '') {
+                        throw new LogicException(
+                            'The linked service identifier and role must both be present.',
+                        );
+                    }
+
+                    if (
+                        $linkRole !== 'hosting'
+                        && $linkRole !== 'registrar'
+                    ) {
+                        throw new LogicException(
+                            'The linked service role is invalid.',
+                        );
+                    }
+
+                    $linkedServices[$linkId] ??= [
+                        'domain_mode' => null,
+                        'hosting' => null,
+                        'registrar' => null,
+                    ];
+
+                    if (
+                        $linkedServices[$linkId][$linkRole]
+                        !== null
+                    ) {
+                        throw new LogicException(
+                            'A linked service role is duplicated.',
+                        );
+                    }
+
+                    $linkedServices[$linkId][$linkRole] =
+                        $service;
+
+                    if ($linkRole === 'hosting') {
+                        $linkedServices[$linkId][
+                            'domain_mode'
+                        ] = $checkoutConfig[
+                            'domain_mode'
+                        ] ?? null;
+                    }
                 }
 
                 foreach ($item->config_options as $configOption) {
@@ -253,6 +314,10 @@ class Cart extends Component
                 }
             }
 
+            $this->createHostingDomainServiceLinks(
+                $linkedServices,
+            );
+
             // Commit the transaction
             DB::commit();
 
@@ -297,6 +362,44 @@ class Cart extends Component
                 Service::STATUS_CANCELLED,
             )
             ->count();
+    }
+    protected function createHostingDomainServiceLinks(
+        array $linkedServices,
+    ): void {
+        foreach ($linkedServices as $linkedPair) {
+            $hostingService =
+                $linkedPair['hosting'] ?? null;
+
+            $domainService =
+                $linkedPair['registrar'] ?? null;
+
+            $domainMode =
+                $linkedPair['domain_mode'] ?? null;
+
+            if (
+                $domainMode === 'external'
+                && $hostingService instanceof Service
+                && $domainService === null
+            ) {
+                continue;
+            }
+
+            if (
+                !($hostingService instanceof Service)
+                || !($domainService instanceof Service)
+            ) {
+                throw new LogicException(
+                    'A linked hosting-domain purchase must contain exactly one hosting service and one domain service.',
+                );
+            }
+
+            HostingDomainServiceLink::query()->create([
+                'hosting_service_id' =>
+                    $hostingService->id,
+                'domain_service_id' =>
+                    $domainService->id,
+            ]);
+        }
     }
     public function render()
     {
