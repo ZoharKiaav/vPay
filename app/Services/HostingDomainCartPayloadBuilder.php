@@ -37,7 +37,32 @@ class HostingDomainCartPayloadBuilder
 
         $linkId = $this->normaliseLinkId($linkId);
 
+        $canonicalEditingConfig = [
+            'registration_period' => (string) (
+                $customerValues['registration_period'] ?? '1'
+            ),
+            'use_custom_nameservers' => $customerValues[
+                'use_custom_nameservers'
+            ] ?? false,
+            'nameserver_1' => $customerValues[
+                'nameserver_1'
+            ] ?? null,
+            'nameserver_2' => $customerValues[
+                'nameserver_2'
+            ] ?? null,
+            'nameserver_3' => $customerValues[
+                'nameserver_3'
+            ] ?? null,
+            'nameserver_4' => $customerValues[
+                'nameserver_4'
+            ] ?? null,
+            'nameserver_5' => $customerValues[
+                'nameserver_5'
+            ] ?? null,
+        ];
+
         $hostingCheckoutConfig = array_merge(
+            $canonicalEditingConfig,
             $selection->toCheckoutConfig(),
             [
                 self::LINK_ID_KEY => $linkId,
