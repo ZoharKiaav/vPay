@@ -296,7 +296,9 @@ class Cart extends Component
 
                 // Create the invoice items
                 if ($item->price->total > 0) {
-                    $invoice->items()->create([
+                    $service->refresh();
+
+                $invoice->items()->create([
                         'reference_id' => $service->id,
                         'reference_type' => Service::class,
                         'price' => $item->price->total,

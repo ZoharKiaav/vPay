@@ -116,6 +116,19 @@
                             ),
                         );
 
+                        $billingPeriod = max(
+                            1,
+                            (int) $item->plan->billing_period,
+                        );
+
+                        $billingUnit = strtolower(trim(
+                            (string) $item->plan->billing_unit,
+                        ));
+
+                        $billingUnitLabel = $billingPeriod === 1
+                            ? $billingUnit
+                            : $billingUnit . 's';
+
                         $usesCustomNameservers = filter_var(
                             $checkoutConfig['use_custom_nameservers']
                                 ?? false,
@@ -153,6 +166,16 @@
                         </div>
 
                         <dl class="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-[9rem_1fr]">
+                            @if ($linkedRole === 'hosting')
+                            <dt class="text-primary-100/70">
+                                Billing period
+                            </dt>
+                            <dd class="text-primary-100">
+                                {{ $billingPeriod }}
+                                {{ $billingUnitLabel }}
+                            </dd>
+                            @endif
+
                             <dt class="text-primary-100/70">
                                 Domain
                             </dt>
@@ -168,7 +191,9 @@
                             </dd>
 
                             <dt class="text-primary-100/70">
-                                Period
+                                {{ $linkedRole === 'hosting'
+                                    ? 'Domain registration'
+                                    : 'Registration period' }}
                             </dt>
                             <dd class="text-primary-100">
                                 {{ $registrationPeriod }}
