@@ -114,7 +114,15 @@ class Service extends Model implements Auditable
             );
         }
         $date = $this->expires_at ?? now();
-        $endDate = $date->copy()->{'add' . ucfirst($this->plan->billing_unit) . 's'}($this->plan->billing_period);
+
+        [$billingPeriod, $billingUnit] =
+            $this->billingTerm();
+
+        $endDate = $date
+            ->copy()
+            ->{'add' . ucfirst($billingUnit) . 's'}(
+                $billingPeriod,
+            );
 
         return Attribute::make(
             get: fn () => $this->product->name . ' (' . $date->format('M d, Y') . ' - ' . $endDate->format('M d, Y') . ')'
@@ -136,9 +144,60 @@ class Service extends Model implements Auditable
             $date = $this->expires_at;
         }
 
-        return $date->{'add' . ucfirst($this->plan->billing_unit) . 's'}($this->plan->billing_period);
+        [$billingPeriod, $billingUnit] =
+            $this->billingTerm();
+
+        return $date
+            ->{'add' . ucfirst($billingUnit) . 's'}(
+                $billingPeriod,
+            );
     }
 
+    private function billingTerm(): array
+    {
+        $billingPeriod = (int) $this->plan->billing_period;
+        $billingUnit = (string) $this->plan->billing_unit;
+
+        if ($this->status !== self::STATUS_PENDING) {
+            return [
+                $billingPeriod,
+                $billingUnit,
+            ];
+        }
+
+        $linkRole = $this->properties()
+            ->where(
+                'key',
+                'hosting_domain_link_role',
+            )
+            ->value('value');
+
+        if ($linkRole !== 'registrar') {
+            return [
+                $billingPeriod,
+                $billingUnit,
+            ];
+        }
+
+        $registrationPeriod = $this->properties()
+            ->where('key', 'registration_period')
+            ->value('value');
+
+        if (
+            !is_numeric($registrationPeriod)
+            || (int) $registrationPeriod < 1
+        ) {
+            return [
+                $billingPeriod,
+                $billingUnit,
+            ];
+        }
+
+        return [
+            (int) $registrationPeriod,
+            'year',
+        ];
+    }
     /**
      * Get the product corresponding to the service.
      */
