@@ -197,6 +197,10 @@ class Cart extends Component
                 ]);
 
                 foreach ($item->checkout_config as $key => $value) {
+                    if ($value === null) {
+                        continue;
+                    }
+
                     $service->properties()->updateOrCreate([
                         'key' => $key,
                     ], [

@@ -88,10 +88,20 @@ class CartItem extends Model
                     }
                 });
 
-                $total += ExtensionHelper::getCheckoutPrice(
-                    $this->product,
-                    (array) $this->checkout_config,
-                );
+                $checkoutConfig = (array) $this->checkout_config;
+
+                $linkedRole = trim((string) (
+                    $checkoutConfig[
+                        'hosting_domain_link_role'
+                    ] ?? ''
+                ));
+
+                if ($linkedRole !== 'hosting') {
+                    $total += ExtensionHelper::getCheckoutPrice(
+                        $this->product,
+                        $checkoutConfig,
+                    );
+                }
 
                 // A paid option without a price row must make the whole item unavailable, not contribute 0.
                 if ($unavailable) {
