@@ -77,9 +77,51 @@ class LinkedPaidProvisioningService
         Service $domainService,
         Service $hostingService,
     ): void {
+        $domainService = $domainService->fresh();
+        $hostingService = $hostingService->fresh();
+
         if (
-            $domainService->status !== Service::STATUS_PENDING
-            || $hostingService->status !== Service::STATUS_PENDING
+            $domainService === null
+            || $hostingService === null
+        ) {
+            return;
+        }
+
+        if (
+            $domainService->status
+                === Service::STATUS_ACTIVE
+            && $hostingService->status
+                === Service::STATUS_ACTIVE
+        ) {
+            return;
+        }
+
+        if (
+            !in_array(
+                $domainService->status,
+                [
+                    Service::STATUS_PENDING,
+                    Service::STATUS_ACTIVE,
+                ],
+                true,
+            )
+            || !in_array(
+                $hostingService->status,
+                [
+                    Service::STATUS_PENDING,
+                    Service::STATUS_ACTIVE,
+                ],
+                true,
+            )
+        ) {
+            return;
+        }
+
+        if (
+            $domainService->status
+                === Service::STATUS_PENDING
+            && $hostingService->status
+                === Service::STATUS_ACTIVE
         ) {
             return;
         }
@@ -91,20 +133,37 @@ class LinkedPaidProvisioningService
             return;
         }
 
+        $jobs = [];
+
+        if (
+            $domainService->status
+                === Service::STATUS_PENDING
+        ) {
+            $jobs[] = new CreateJob(
+                service: $domainService,
+                activateOnSuccess: true,
+            );
+        }
+
+        if (
+            $hostingService->status
+                === Service::STATUS_PENDING
+        ) {
+            $jobs[] = new CreateJob(
+                service: $hostingService,
+                activateOnSuccess: true,
+            );
+        }
+
+        if ($jobs === []) {
+            return;
+        }
+
         $this->reserveDispatch($domainService);
         $this->reserveDispatch($hostingService);
 
         try {
-            Bus::chain([
-                new CreateJob(
-                    service: $domainService,
-                    activateOnSuccess: true,
-                ),
-                new CreateJob(
-                    service: $hostingService,
-                    activateOnSuccess: true,
-                ),
-            ])->dispatch();
+            Bus::chain($jobs)->dispatch();
         } catch (Throwable $exception) {
             $this->releaseDispatch($domainService);
             $this->releaseDispatch($hostingService);

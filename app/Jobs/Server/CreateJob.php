@@ -4,12 +4,14 @@ namespace App\Jobs\Server;
 
 use App\Helpers\NotificationHelper;
 use App\Models\Service;
+use App\Services\Service\LinkedProvisioningRecoveryService;
 use App\Services\Service\ServerProvisioningService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 class CreateJob implements ShouldQueue
 {
@@ -33,8 +35,13 @@ class CreateJob implements ShouldQueue
      */
     public function handle(
         ServerProvisioningService $provisioner,
+        ?LinkedProvisioningRecoveryService $recovery = null,
     ): void {
         $service = $this->service->fresh();
+
+        if ($service === null) {
+            return;
+        }
 
         if (
             $this->activateOnSuccess
@@ -42,6 +49,10 @@ class CreateJob implements ShouldQueue
         ) {
             return;
         }
+
+        $recovery ??= app(
+            LinkedProvisioningRecoveryService::class,
+        );
 
         $data = $provisioner->create($service);
 
@@ -51,6 +62,9 @@ class CreateJob implements ShouldQueue
 
             $service->status = Service::STATUS_ACTIVE;
             $service->save();
+
+            $recovery->clearFailure($service);
+            $recovery->completeIfPairActive($service);
         }
 
         if ($this->sendNotification) {
@@ -60,5 +74,21 @@ class CreateJob implements ShouldQueue
                 is_array($data) ? $data : [],
             );
         }
+    }
+
+    /**
+     * Record recoverable linked provisioning failures.
+     */
+    public function failed(Throwable $exception): void
+    {
+        if (!$this->activateOnSuccess) {
+            return;
+        }
+
+        app(LinkedProvisioningRecoveryService::class)
+            ->recordFailure(
+                $this->service,
+                $exception,
+            );
     }
 }
