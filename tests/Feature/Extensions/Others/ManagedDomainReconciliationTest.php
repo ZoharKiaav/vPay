@@ -40,6 +40,19 @@ class ManagedDomainReconciliationTest extends TestCase
             $migration->up();
         }
 
+        if (!Schema::hasColumn(
+            'ext_absolute_hosting_domains',
+            'provider_reference',
+        )) {
+            $migration = require base_path(
+                'extensions/Others/AbsoluteHostingDomains/'
+                . 'database/migrations/'
+                . '2026_10_16_000002_add_submission_tracking_to_ext_absolute_hosting_domains_table.php'
+            );
+
+            $migration->up();
+        }
+
         Http::preventStrayRequests();
     }
 
@@ -194,7 +207,122 @@ class ManagedDomainReconciliationTest extends TestCase
         $this->assertNotNull($persisted->last_synced_at);
     }
 
-    private function managedDomain(): ManagedDomain
+    public function test_uncertain_active_domain_is_confirmed_without_resubmission(): void
+    {
+        $managedDomain = $this->managedDomain(
+            providerStatus: 'uncertain',
+        );
+
+        Http::fake([
+            self::ENDPOINT
+                . '/domains/example.co.za/information' =>
+                    Http::response($this->providerResponse()),
+        ]);
+
+        $this->service()->reconcile($managedDomain);
+
+        $persisted = $managedDomain->fresh();
+
+        $this->assertNotNull($persisted);
+        $this->assertSame(
+            'submitted',
+            $persisted->provider_status,
+        );
+        $this->assertNotNull(
+            $persisted->submission_confirmed_at,
+        );
+        $this->assertSame(
+            'submitted',
+            $persisted->provider_data['submission_state'],
+        );
+        $this->assertArrayHasKey(
+            'reconciliation_confirmed_at',
+            $persisted->provider_data,
+        );
+        $this->assertSame(
+            ManagedDomain::STATUS_ACTIVE,
+            $persisted->status,
+        );
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_uncertain_pending_domain_is_confirmed_without_resubmission(): void
+    {
+        $managedDomain = $this->managedDomain(
+            providerStatus: 'uncertain',
+        );
+
+        $response = $this->providerResponse();
+        $response['status'] = 'Registration pending';
+
+        Http::fake([
+            self::ENDPOINT
+                . '/domains/example.co.za/information' =>
+                    Http::response($response),
+        ]);
+
+        $this->service()->reconcile($managedDomain);
+
+        $persisted = $managedDomain->fresh();
+
+        $this->assertNotNull($persisted);
+        $this->assertSame(
+            'submitted',
+            $persisted->provider_status,
+        );
+        $this->assertNotNull(
+            $persisted->submission_confirmed_at,
+        );
+        $this->assertSame(
+            ManagedDomain::STATUS_PENDING,
+            $persisted->status,
+        );
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_unknown_provider_state_does_not_confirm_uncertain_submission(): void
+    {
+        $managedDomain = $this->managedDomain(
+            providerStatus: 'uncertain',
+        );
+
+        $response = $this->providerResponse();
+        $response['status'] = 'Provider-specific state';
+
+        Http::fake([
+            self::ENDPOINT
+                . '/domains/example.co.za/information' =>
+                    Http::response($response),
+        ]);
+
+        $this->service()->reconcile($managedDomain);
+
+        $persisted = $managedDomain->fresh();
+
+        $this->assertNotNull($persisted);
+        $this->assertSame(
+            'uncertain',
+            $persisted->provider_status,
+        );
+        $this->assertNull(
+            $persisted->submission_confirmed_at,
+        );
+        $this->assertSame(
+            'uncertain',
+            $persisted->provider_data['submission_state'],
+        );
+        $this->assertArrayNotHasKey(
+            'reconciliation_confirmed_at',
+            $persisted->provider_data,
+        );
+
+        Http::assertSentCount(1);
+    }
+    private function managedDomain(
+        string $providerStatus = 'submitted',
+    ): ManagedDomain
     {
         $user = User::factory()->create();
 
@@ -208,7 +336,15 @@ class ManagedDomainReconciliationTest extends TestCase
             'domain_name' => 'example.co.za',
             'tld' => '.co.za',
             'status' => ManagedDomain::STATUS_PENDING,
-            'provider_status' => 'submitted',
+            'provider_status' => $providerStatus,
+            'provider_reference' => $providerStatus === 'submitted'
+                ? 'ORDER-001'
+                : null,
+            'submission_started_at' => now()->subMinute(),
+            'submission_confirmed_at' =>
+                $providerStatus === 'submitted'
+                    ? now()
+                    : null,
             'registration_period' => 1,
             'transfer_locked' => false,
             'nameservers' => [
@@ -222,7 +358,7 @@ class ManagedDomainReconciliationTest extends TestCase
             ],
             'provider_data' => [
                 'operation' => 'register',
-                'submission_state' => 'submitted',
+                'submission_state' => $providerStatus,
                 'response' => [
                     'order_reference' => 'ORDER-001',
                 ],

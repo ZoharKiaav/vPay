@@ -34,6 +34,19 @@ class ManagedDomainReconciliationService
 
         $providerData['reconciliation'] = $result->toArray();
 
+        if (
+            $managedDomain->provider_status === 'uncertain'
+            && $this->providerConfirmsOrder($result->status)
+        ) {
+            $managedDomain->provider_status = 'submitted';
+            $managedDomain->submission_confirmed_at = now();
+
+            $providerData['submission_state'] = 'submitted';
+            $providerData['reconciliation_confirmed_at'] =
+                $managedDomain->submission_confirmed_at
+                    ?->toIso8601String();
+        }
+
         $managedDomain->status = $this->localStatus(
             $result->status,
             $managedDomain->status,
@@ -53,6 +66,22 @@ class ManagedDomainReconciliationService
         return $result;
     }
 
+    private function providerConfirmsOrder(
+        string $providerStatus,
+    ): bool {
+        return in_array(
+            strtolower(trim($providerStatus)),
+            [
+                'active',
+                'registered',
+                'pending',
+                'registration pending',
+                'transfer pending',
+                'pending transfer',
+            ],
+            true,
+        );
+    }
     private function localStatus(
         string $providerStatus,
         string $currentStatus,

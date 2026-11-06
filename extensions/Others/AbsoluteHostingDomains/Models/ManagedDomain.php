@@ -28,6 +28,9 @@ class ManagedDomain extends Model
         'tld',
         'status',
         'provider_status',
+        'provider_reference',
+        'submission_started_at',
+        'submission_confirmed_at',
         'registration_period',
         'expires_at',
         'transfer_locked',
@@ -44,6 +47,8 @@ class ManagedDomain extends Model
         'nameservers' => 'array',
         'contact_data' => 'encrypted:array',
         'provider_data' => 'array',
+        'submission_started_at' => 'datetime',
+        'submission_confirmed_at' => 'datetime',
         'last_synced_at' => 'datetime',
     ];
 
@@ -78,7 +83,12 @@ class ManagedDomain extends Model
                     static fn (mixed $value): bool => is_string($value) && trim($value) !== '',
                 ),
             ),
-            'provider_reference' => $this->providerReference(),
+            'provider_reference' => $this->provider_reference
+                ?: $this->providerReference(),
+            'submission_started_at' =>
+                $this->submission_started_at?->toIso8601String(),
+            'submission_confirmed_at' =>
+                $this->submission_confirmed_at?->toIso8601String(),
             'last_synced_at' => $this->last_synced_at?->toIso8601String(),
             'warning' => $this->provider_status === 'uncertain'
                 ? 'The provider result is uncertain. Verify the order before any retry.'
