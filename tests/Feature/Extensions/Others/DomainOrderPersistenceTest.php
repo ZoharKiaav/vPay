@@ -40,6 +40,19 @@ class DomainOrderPersistenceTest extends TestCase
             $migration->up();
         }
 
+        if (!Schema::hasColumn(
+            'ext_absolute_hosting_domains',
+            'provider_reference',
+        )) {
+            $migration = require base_path(
+                'extensions/Others/AbsoluteHostingDomains/'
+                . 'database/migrations/'
+                . '2026_10_16_000002_add_submission_tracking_to_ext_absolute_hosting_domains_table.php'
+            );
+
+            $migration->up();
+        }
+
         Http::preventStrayRequests();
     }
 
@@ -71,6 +84,22 @@ class DomainOrderPersistenceTest extends TestCase
             DomainOrderService::PROVIDER_STATUS_SUBMITTED,
             $persisted->provider_status,
         );
+        $this->assertSame(
+            'TEST-ORDER-001',
+            $persisted->provider_reference,
+        );
+        $this->assertNotNull(
+            $persisted->submission_started_at,
+        );
+        $this->assertNotNull(
+            $persisted->submission_confirmed_at,
+        );
+        $this->assertTrue(
+            $persisted->submission_confirmed_at
+                ->greaterThanOrEqualTo(
+                    $persisted->submission_started_at,
+                ),
+        );
         $this->assertSame('example.co.za', $persisted->domain_name);
         $this->assertSame('.co.za', $persisted->tld);
         $this->assertSame(1, $persisted->registration_period);
@@ -98,6 +127,7 @@ class DomainOrderPersistenceTest extends TestCase
             'service_id' => $persisted->service_id,
             'domain_name' => 'example.co.za',
             'provider_status' => DomainOrderService::PROVIDER_STATUS_SUBMITTED,
+            'provider_reference' => 'TEST-ORDER-001',
         ]);
 
         $rawContactData = DB::table('ext_absolute_hosting_domains')
@@ -144,9 +174,20 @@ class DomainOrderPersistenceTest extends TestCase
             DomainOrderService::PROVIDER_STATUS_UNCERTAIN,
             $persisted->provider_status,
         );
+        $this->assertNull($persisted->provider_reference);
+        $this->assertNotNull(
+            $persisted->submission_started_at,
+        );
+        $this->assertNull(
+            $persisted->submission_confirmed_at,
+        );
         $this->assertSame(
             DomainOrderService::PROVIDER_STATUS_UNCERTAIN,
             $persisted->provider_data['submission_state'],
+        );
+        $this->assertArrayHasKey(
+            'submission_started_at',
+            $persisted->provider_data,
         );
         $this->assertSame(
             'Simulated provider timeout.',

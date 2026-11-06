@@ -41,6 +41,19 @@ class AbsoluteHostingDomainsLifecycleTest extends TestCase
             $migration->up();
         }
 
+        if (!Schema::hasColumn(
+            'ext_absolute_hosting_domains',
+            'provider_reference',
+        )) {
+            $migration = require base_path(
+                'extensions/Others/AbsoluteHostingDomains/'
+                . 'database/migrations/'
+                . '2026_10_16_000002_add_submission_tracking_to_ext_absolute_hosting_domains_table.php'
+            );
+
+            $migration->up();
+        }
+
         Http::preventStrayRequests();
     }
 

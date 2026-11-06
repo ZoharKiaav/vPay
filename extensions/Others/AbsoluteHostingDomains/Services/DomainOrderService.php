@@ -93,6 +93,9 @@ class DomainOrderService
             ? ManagedDomain::STATUS_TRANSFER_PENDING
             : ManagedDomain::STATUS_PENDING;
         $managedDomain->provider_status = self::PROVIDER_STATUS_SUBMITTING;
+        $managedDomain->provider_reference = null;
+        $managedDomain->submission_started_at = now();
+        $managedDomain->submission_confirmed_at = null;
         $managedDomain->nameservers = $this->normaliseNameservers(
             $payload['nameservers'],
         );
@@ -100,6 +103,9 @@ class DomainOrderService
         $managedDomain->provider_data = [
             'operation' => $action,
             'submission_state' => self::PROVIDER_STATUS_SUBMITTING,
+            'submission_started_at' =>
+                $managedDomain->submission_started_at
+                    ?->toIso8601String(),
         ];
 
         $managedDomain->save();
@@ -127,13 +133,27 @@ class DomainOrderService
         string $action,
         array $response,
     ): void {
-        $managedDomain->provider_status = self::PROVIDER_STATUS_SUBMITTED;
-        $managedDomain->provider_data = [
-            'operation' => $action,
-            'submission_state' => self::PROVIDER_STATUS_SUBMITTED,
-            'response' => $response,
-        ];
+        $managedDomain->provider_status =
+            self::PROVIDER_STATUS_SUBMITTED;
 
+        $managedDomain->provider_reference =
+            $this->providerReference($response);
+
+        $managedDomain->submission_confirmed_at = now();
+
+        $providerData = is_array($managedDomain->provider_data)
+            ? $managedDomain->provider_data
+            : [];
+
+        $providerData['operation'] = $action;
+        $providerData['submission_state'] =
+            self::PROVIDER_STATUS_SUBMITTED;
+        $providerData['submission_confirmed_at'] =
+            $managedDomain->submission_confirmed_at
+                ?->toIso8601String();
+        $providerData['response'] = $response;
+
+        $managedDomain->provider_data = $providerData;
         $managedDomain->save();
     }
 
@@ -142,17 +162,45 @@ class DomainOrderService
         string $action,
         Throwable $exception,
     ): void {
-        $managedDomain->provider_status = self::PROVIDER_STATUS_UNCERTAIN;
-        $managedDomain->provider_data = [
-            'operation' => $action,
-            'submission_state' => self::PROVIDER_STATUS_UNCERTAIN,
-            'exception' => $exception::class,
-            'message' => $exception->getMessage(),
-        ];
+        $managedDomain->provider_status =
+            self::PROVIDER_STATUS_UNCERTAIN;
 
+        $providerData = is_array($managedDomain->provider_data)
+            ? $managedDomain->provider_data
+            : [];
+
+        $providerData['operation'] = $action;
+        $providerData['submission_state'] =
+            self::PROVIDER_STATUS_UNCERTAIN;
+        $providerData['exception'] = $exception::class;
+        $providerData['message'] = $exception->getMessage();
+
+        $managedDomain->provider_data = $providerData;
         $managedDomain->save();
     }
 
+    private function providerReference(
+        array $response,
+    ): ?string {
+        foreach ([
+            'order_reference',
+            'orderReference',
+            'order_id',
+            'orderId',
+            'id',
+        ] as $key) {
+            $value = $response[$key] ?? null;
+
+            if (
+                is_scalar($value)
+                && trim((string) $value) !== ''
+            ) {
+                return trim((string) $value);
+            }
+        }
+
+        return null;
+    }
     private function extractTld(string $domain): string
     {
         $labels = explode('.', strtolower($domain));
