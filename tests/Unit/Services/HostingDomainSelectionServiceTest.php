@@ -93,7 +93,6 @@ class HostingDomainSelectionServiceTest extends TestCase
             'domain_action' => null,
             'domain_sld' => null,
             'domain_tld' => null,
-            'epp_code' => null,
             'registrar_product_id' => null,
         ], $selection->toCheckoutConfig());
     }

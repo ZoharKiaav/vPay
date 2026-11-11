@@ -119,7 +119,6 @@ class HostingDomainCartPayloadBuilder
             'nameserver_5' => $customerValues[
                 'nameserver_5'
             ] ?? null,
-            'epp_code' => $selection->eppCode,
         ];
 
         $registrarCheckoutConfig =
@@ -127,6 +126,12 @@ class HostingDomainCartPayloadBuilder
                 $registrarProduct,
                 $registrarCheckoutConfig,
             );
+
+        if ($selection->mode === HostingDomainSelection::MODE_TRANSFER) {
+            $registrarCheckoutConfig['epp_code'] = $selection->eppCode;
+        } else {
+            unset($registrarCheckoutConfig['epp_code']);
+        }
 
         $registrarCheckoutConfig[self::LINK_ID_KEY] = $linkId;
         $registrarCheckoutConfig[self::LINK_ROLE_KEY] =

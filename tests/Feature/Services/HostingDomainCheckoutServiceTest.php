@@ -147,7 +147,6 @@ class HostingDomainCheckoutServiceTest extends TestCase
             'domain_action' => 'register',
             'domain_sld' => 'example',
             'domain_tld' => '.co.za',
-            'epp_code' => null,
             'registrar_product_id' => $registrarProduct->id,
         ], $config);
 
