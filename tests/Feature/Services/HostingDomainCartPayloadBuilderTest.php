@@ -122,6 +122,15 @@ class HostingDomainCartPayloadBuilderTest extends TestCase
                 'domain_action'
             ],
         );
+
+        $this->assertArrayNotHasKey(
+            'epp_code',
+            $payloads->hosting['checkout_config'],
+        );
+        $this->assertArrayNotHasKey(
+            'epp_code',
+            $payloads->registrar['checkout_config'],
+        );
     }
 
     public function test_transfer_preserves_the_epp_code_only_on_registrar_payload(): void
@@ -158,11 +167,9 @@ class HostingDomainCartPayloadBuilderTest extends TestCase
             ],
         );
 
-        $this->assertSame(
-            'TEST-EPP-CODE',
-            $payloads->hosting['checkout_config'][
-                'epp_code'
-            ],
+        $this->assertArrayNotHasKey(
+            'epp_code',
+            $payloads->hosting['checkout_config'],
         );
     }
 
@@ -201,6 +208,11 @@ class HostingDomainCartPayloadBuilderTest extends TestCase
             $payloads->hosting['checkout_config'][
                 'domain_mode'
             ],
+        );
+
+        $this->assertArrayNotHasKey(
+            'epp_code',
+            $payloads->hosting['checkout_config'],
         );
     }
 

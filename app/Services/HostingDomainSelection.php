@@ -45,7 +45,6 @@ final readonly class HostingDomainSelection
             'domain_action' => $this->registrarAction,
             'domain_sld' => $this->sld,
             'domain_tld' => $this->tld,
-            'epp_code' => $this->eppCode,
             'registrar_product_id' => $this->registrarProductId,
         ];
     }
