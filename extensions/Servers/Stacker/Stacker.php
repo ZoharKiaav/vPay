@@ -459,6 +459,120 @@ class Stacker extends Server
             'cancellation',
         );
     }
+    public function canonicalCustomerSafeEndpoints(
+        array $customerSafe,
+    ): ?string {
+        $endpoints = $customerSafe['endpoints'] ?? null;
+
+        if ($endpoints === null) {
+            return null;
+        }
+
+        if (!is_array($endpoints)) {
+            throw new Exception(
+                'Stacker customer-safe endpoints must be an array',
+            );
+        }
+
+        $canonical = [];
+        $keys = [];
+        $primaryCount = 0;
+
+        foreach ($endpoints as $endpoint) {
+            if (!is_array($endpoint)) {
+                throw new Exception(
+                    'Stacker customer-safe endpoint must be an object',
+                );
+            }
+
+            $allowedFields = [
+                'key',
+                'url',
+                'primary',
+            ];
+
+            $unexpectedFields = array_diff(
+                array_keys($endpoint),
+                $allowedFields,
+            );
+
+            if ($unexpectedFields !== []) {
+                throw new Exception(
+                    'Stacker customer-safe endpoint contains unsupported fields',
+                );
+            }
+
+            $key = $endpoint['key'] ?? null;
+            $url = $endpoint['url'] ?? null;
+            $primary = $endpoint['primary'] ?? null;
+
+            if (!is_string($key) || trim($key) === '') {
+                throw new Exception(
+                    'Stacker customer-safe endpoint has an invalid key',
+                );
+            }
+
+            $key = trim($key);
+
+            if (isset($keys[$key])) {
+                throw new Exception(
+                    'Stacker customer-safe endpoint key is duplicated',
+                );
+            }
+
+            if (
+                !is_string($url)
+                || !filter_var($url, FILTER_VALIDATE_URL)
+                || !in_array(
+                    parse_url($url, PHP_URL_SCHEME),
+                    ['http', 'https'],
+                    true,
+                )
+            ) {
+                throw new Exception(
+                    'Stacker customer-safe endpoint has an invalid URL',
+                );
+            }
+
+            if (!is_bool($primary)) {
+                throw new Exception(
+                    'Stacker customer-safe endpoint has an invalid primary flag',
+                );
+            }
+
+            if ($primary) {
+                $primaryCount++;
+            }
+
+            $keys[$key] = true;
+
+            $canonical[] = [
+                'key' => $key,
+                'url' => $url,
+                'primary' => $primary,
+            ];
+        }
+
+        if ($canonical !== [] && $primaryCount !== 1) {
+            throw new Exception(
+                'Stacker customer-safe endpoints require exactly one primary endpoint',
+            );
+        }
+
+        usort(
+            $canonical,
+            fn (array $left, array $right): int =>
+                $left['key'] <=> $right['key'],
+        );
+
+        $encoded = json_encode(
+            $canonical,
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        );
+
+        return $encoded;
+    }
+
     public function buildServiceStatusPropertyUpdates(
         array $response,
     ): array {
@@ -521,6 +635,17 @@ class Stacker extends Server
                     'value' => $value,
                 ];
             }
+        }
+
+        $endpoints = $this->canonicalCustomerSafeEndpoints(
+            $customerSafe,
+        );
+
+        if ($endpoints !== null) {
+            $updates['vkloud_endpoints'] = [
+                'name' => 'Service endpoints',
+                'value' => $endpoints,
+            ];
         }
 
         return $updates;

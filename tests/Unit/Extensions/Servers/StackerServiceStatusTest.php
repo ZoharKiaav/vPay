@@ -34,6 +34,18 @@ class StackerServiceStatusTest extends TestCase
             'resources' => [],
             'customerSafe' => [
                 'primaryUrl' => 'https://client.example.test',
+                'endpoints' => [
+                    [
+                        'key' => 'website',
+                        'url' => 'https://client.example.test',
+                        'primary' => true,
+                    ],
+                    [
+                        'key' => 'support',
+                        'url' => 'https://support.client.example.test',
+                        'primary' => false,
+                    ],
+                ],
                 'displayName' => 'Client Operations',
                 'healthStatus' => 'healthy',
                 'supportReference' => 'support-42',
@@ -57,7 +69,73 @@ class StackerServiceStatusTest extends TestCase
             'https://client.example.test',
             $updates['vkloud_primary_url']['value'],
         );
+        $this->assertSame(
+            '[{"key":"support","url":"https://support.client.example.test","primary":false},{"key":"website","url":"https://client.example.test","primary":true}]',
+            $updates['vkloud_endpoints']['value'],
+        );
         $this->assertArrayNotHasKey('internalIp', $updates);
+    }
+
+    public function test_canonicalises_endpoint_order(): void
+    {
+        $response = $this->response();
+
+        $response['customerSafe']['endpoints'] = array_reverse(
+            $response['customerSafe']['endpoints'],
+        );
+
+        $updates = $this->client()
+            ->buildServiceStatusPropertyUpdates($response);
+
+        $this->assertSame(
+            '[{"key":"support","url":"https://support.client.example.test","primary":false},{"key":"website","url":"https://client.example.test","primary":true}]',
+            $updates['vkloud_endpoints']['value'],
+        );
+    }
+
+    public function test_rejects_endpoint_infrastructure_fields(): void
+    {
+        $response = $this->response();
+        $response['customerSafe']['endpoints'][0]['host']
+            = 'internal.example.test';
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            'Stacker customer-safe endpoint contains unsupported fields',
+        );
+
+        $this->client()
+            ->buildServiceStatusPropertyUpdates($response);
+    }
+
+    public function test_rejects_duplicate_endpoint_keys(): void
+    {
+        $response = $this->response();
+        $response['customerSafe']['endpoints'][1]['key']
+            = 'website';
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            'Stacker customer-safe endpoint key is duplicated',
+        );
+
+        $this->client()
+            ->buildServiceStatusPropertyUpdates($response);
+    }
+
+    public function test_rejects_multiple_primary_endpoints(): void
+    {
+        $response = $this->response();
+        $response['customerSafe']['endpoints'][1]['primary']
+            = true;
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            'Stacker customer-safe endpoints require exactly one primary endpoint',
+        );
+
+        $this->client()
+            ->buildServiceStatusPropertyUpdates($response);
     }
 
     public function test_omits_empty_optional_fields(): void
@@ -99,7 +177,7 @@ class StackerServiceStatusTest extends TestCase
         $relation = Mockery::mock();
 
         $relation->shouldReceive('updateOrCreate')
-            ->times(5);
+            ->times(6);
 
         $service = Mockery::mock(Service::class)
             ->makePartial();
@@ -107,7 +185,7 @@ class StackerServiceStatusTest extends TestCase
         $service->id = 42;
 
         $service->shouldReceive('properties')
-            ->times(5)
+            ->times(6)
             ->andReturn($relation);
 
         $response = $this->client()
