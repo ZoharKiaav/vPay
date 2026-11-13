@@ -716,6 +716,65 @@ class Stacker extends Server
             ];
         }
 
+        $encodedEndpoints = $properties['vkloud_endpoints']
+            ?? null;
+
+        if (
+            is_string($encodedEndpoints)
+            && $encodedEndpoints !== ''
+        ) {
+            try {
+                $decodedEndpoints = json_decode(
+                    $encodedEndpoints,
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR,
+                );
+
+                $canonicalEndpoints =
+                    $this->canonicalCustomerSafeEndpoints([
+                        'endpoints' => $decodedEndpoints,
+                    ]);
+
+                $endpoints = $canonicalEndpoints === null
+                    ? []
+                    : json_decode(
+                        $canonicalEndpoints,
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR,
+                    );
+
+                foreach ($endpoints as $endpoint) {
+                    if ($endpoint['primary']) {
+                        continue;
+                    }
+
+                    $actions[] = [
+                        'name' => sprintf(
+                            'vkloud_endpoint_%s',
+                            $endpoint['key'],
+                        ),
+                        'label' => sprintf(
+                            'Open %s',
+                            ucfirst(
+                                str_replace(
+                                    '-',
+                                    ' ',
+                                    $endpoint['key'],
+                                ),
+                            ),
+                        ),
+                        'url' => $endpoint['url'],
+                        'type' => 'button',
+                    ];
+                }
+            } catch (\Throwable) {
+                // Preserve the primary compatibility action when
+                // stored endpoint metadata is malformed.
+            }
+        }
+
         return $actions;
     }
     public function reconcileOperation(
