@@ -60,6 +60,134 @@ class StackerActionsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_builds_secondary_endpoint_actions_without_duplicating_primary(): void
+    {
+        Http::preventStrayRequests();
+
+        $actions = $this->client()->getActions(
+            $this->service(),
+            [],
+            [
+                'vkloud_service_state' => 'active',
+                'vkloud_primary_url' =>
+                    'https://website.example.test',
+                'vkloud_endpoints' => json_encode(
+                    [
+                        [
+                            'key' => 'support',
+                            'url' =>
+                                'https://support.example.test',
+                            'primary' => false,
+                        ],
+                        [
+                            'key' => 'website',
+                            'url' =>
+                                'https://website.example.test',
+                            'primary' => true,
+                        ],
+                    ],
+                    JSON_THROW_ON_ERROR,
+                ),
+            ],
+        );
+
+        $this->assertCount(3, $actions);
+        $this->assertSame('Status', $actions[0]['label']);
+        $this->assertSame(
+            'Open service',
+            $actions[1]['label'],
+        );
+        $this->assertSame(
+            'https://website.example.test',
+            $actions[1]['url'],
+        );
+        $this->assertSame(
+            'vkloud_endpoint_support',
+            $actions[2]['name'],
+        );
+        $this->assertSame(
+            'Open Support',
+            $actions[2]['label'],
+        );
+        $this->assertSame(
+            'https://support.example.test',
+            $actions[2]['url'],
+        );
+
+        $primaryActions = array_filter(
+            $actions,
+            fn (array $action): bool =>
+                ($action['url'] ?? null)
+                    === 'https://website.example.test',
+        );
+
+        $this->assertCount(1, $primaryActions);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_ignores_malformed_endpoint_json(): void
+    {
+        $actions = $this->client()->getActions(
+            $this->service(),
+            [],
+            [
+                'vkloud_service_state' => 'active',
+                'vkloud_primary_url' =>
+                    'https://website.example.test',
+                'vkloud_endpoints' => '{invalid-json',
+            ],
+        );
+
+        $this->assertCount(2, $actions);
+        $this->assertSame(
+            'Open service',
+            $actions[1]['label'],
+        );
+    }
+
+    public function test_ignores_endpoint_collection_with_unsafe_url(): void
+    {
+        $actions = $this->client()->getActions(
+            $this->service(),
+            [],
+            [
+                'vkloud_service_state' => 'active',
+                'vkloud_primary_url' =>
+                    'https://website.example.test',
+                'vkloud_endpoints' => json_encode(
+                    [
+                        [
+                            'key' => 'website',
+                            'url' =>
+                                'https://website.example.test',
+                            'primary' => true,
+                        ],
+                        [
+                            'key' => 'support',
+                            'url' => 'javascript:alert(1)',
+                            'primary' => false,
+                        ],
+                    ],
+                    JSON_THROW_ON_ERROR,
+                ),
+            ],
+        );
+
+        $this->assertCount(2, $actions);
+        $this->assertSame(
+            'Open service',
+            $actions[1]['label'],
+        );
+
+        $this->assertStringNotContainsString(
+            'javascript:',
+            json_encode(
+                $actions,
+                JSON_THROW_ON_ERROR,
+            ),
+        );
+    }
     public function test_omits_missing_optional_actions(): void
     {
         $actions = $this->client()->getActions(
