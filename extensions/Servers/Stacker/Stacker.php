@@ -101,6 +101,127 @@ class Stacker extends Server
         );
     }
 
+    public function templateCatalogue(): array
+    {
+        return $this->request(
+            'GET',
+            'vkloud/provisioning/v1/templates',
+        );
+    }
+
+    public function approvedTemplateCatalogue(
+        array $response,
+    ): array {
+        $templates = $response['templates'] ?? null;
+
+        if (!is_array($templates)) {
+            throw new Exception(
+                'Stacker template catalogue has no templates array',
+            );
+        }
+
+        $approved = [];
+
+        foreach ($templates as $template) {
+            if (!is_array($template)) {
+                throw new Exception(
+                    'Stacker template catalogue contains an invalid template',
+                );
+            }
+
+            $unexpectedTemplateFields = array_diff(
+                array_keys($template),
+                ['id', 'versions'],
+            );
+
+            if ($unexpectedTemplateFields !== []) {
+                throw new Exception(
+                    'Stacker template catalogue contains unsupported template fields',
+                );
+            }
+
+            $templateId = $template['id'] ?? null;
+            $versions = $template['versions'] ?? null;
+
+            if (
+                !is_string($templateId)
+                || trim($templateId) === ''
+                || !is_array($versions)
+            ) {
+                throw new Exception(
+                    'Stacker template catalogue contains an invalid template',
+                );
+            }
+
+            $templateId = trim($templateId);
+
+            if (isset($approved[$templateId])) {
+                throw new Exception(
+                    'Stacker template catalogue contains a duplicate template',
+                );
+            }
+
+            $approvedVersions = [];
+
+            foreach ($versions as $version) {
+                if (!is_array($version)) {
+                    throw new Exception(
+                        'Stacker template catalogue contains an invalid version',
+                    );
+                }
+
+                $unexpectedVersionFields = array_diff(
+                    array_keys($version),
+                    ['version', 'active'],
+                );
+
+                if ($unexpectedVersionFields !== []) {
+                    throw new Exception(
+                        'Stacker template catalogue contains unsupported version fields',
+                    );
+                }
+
+                $versionName = $version['version'] ?? null;
+                $active = $version['active'] ?? null;
+
+                if (
+                    !is_string($versionName)
+                    || trim($versionName) === ''
+                    || !is_bool($active)
+                ) {
+                    throw new Exception(
+                        'Stacker template catalogue contains an invalid version',
+                    );
+                }
+
+                $versionName = trim($versionName);
+
+                if (isset($approvedVersions[$versionName])) {
+                    throw new Exception(
+                        'Stacker template catalogue contains a duplicate version',
+                    );
+                }
+
+                if ($active) {
+                    $approvedVersions[$versionName] = $versionName;
+                }
+            }
+
+            if ($approvedVersions !== []) {
+                uksort(
+                    $approvedVersions,
+                    'strnatcasecmp',
+                );
+
+                $approved[$templateId] = $approvedVersions;
+            }
+        }
+
+        uksort($approved, 'strnatcasecmp');
+
+        return $approved;
+    }
+
     public function billingCustomerId(Service $service): string
     {
         if (empty($service->user_id)) {
@@ -892,6 +1013,66 @@ class Stacker extends Server
 
     public function getProductConfig($values = []): array
     {
+        $values = is_array($values) ? $values : [];
+
+        $catalogue = $this->approvedTemplateCatalogue(
+            $this->templateCatalogue(),
+        );
+
+        $templateOptions = [];
+
+        foreach (array_keys($catalogue) as $templateId) {
+            $templateOptions[] = [
+                'label' => $templateId,
+                'value' => $templateId,
+            ];
+        }
+
+        $selectedTemplate = $values['template_id'] ?? null;
+        $selectedVersion = $values['template_version'] ?? null;
+
+        if (
+            is_string($selectedTemplate)
+            && $selectedTemplate !== ''
+            && !isset($catalogue[$selectedTemplate])
+        ) {
+            throw new Exception(
+                'Selected Stacker template is not approved',
+            );
+        }
+
+        $versionOptions = [];
+
+        if (
+            is_string($selectedTemplate)
+            && isset($catalogue[$selectedTemplate])
+        ) {
+            foreach (
+                array_keys($catalogue[$selectedTemplate])
+                as $version
+            ) {
+                $versionOptions[] = [
+                    'label' => $version,
+                    'value' => $version,
+                ];
+            }
+        }
+
+        if (
+            is_string($selectedVersion)
+            && $selectedVersion !== ''
+            && (
+                !is_string($selectedTemplate)
+                || !isset(
+                    $catalogue[$selectedTemplate][$selectedVersion],
+                )
+            )
+        ) {
+            throw new Exception(
+                'Selected Stacker template version is not approved',
+            );
+        }
+
         return [
             [
                 'name' => 'workload_type',
@@ -917,19 +1098,28 @@ class Stacker extends Server
             ],
             [
                 'name' => 'template_id',
-                'type' => 'text',
+                'type' => 'select',
                 'label' => 'Stacker template ID',
+                'description' =>
+                    'Template approved by the Stacker execution catalogue.',
                 'required' => true,
+                'live' => true,
+                'options' => $templateOptions,
             ],
             [
                 'name' => 'template_version',
-                'type' => 'text',
+                'type' => 'select',
                 'label' => 'Immutable template version',
+                'description' =>
+                    'Active immutable version approved for the selected template.',
                 'required' => true,
+                'options' => $versionOptions,
+                'disabled' =>
+                    !is_string($selectedTemplate)
+                    || !isset($catalogue[$selectedTemplate]),
             ],
         ];
     }
-
     public function testConfig(): bool|string
     {
         try {
