@@ -162,6 +162,28 @@ class EmailTemplateSeeder extends Seeder
             'edit_preference_message' => 'Notify me about new service activations',
             'in_app_url' => '{{ route("services.show", $service) }}',
         ],
+        'vkloud_service_fulfilled' => [
+            'subject' => 'Your vKloud service is ready',
+            'body' => <<<'HTML'
+                # Your vKloud service is ready
+
+                Your service **{{ $service->product->name }}** has completed provisioning.
+
+                **Service endpoints**
+
+                @foreach($endpoints as $endpoint)
+                - {{ $endpoint['url'] }}@if($endpoint['primary']) (Primary)@endif
+                @endforeach
+
+                You can also access these endpoints from your service page.
+                HTML,
+            'in_app_title' => 'Your vKloud service is ready',
+            'in_app_body' => 'Provisioning for {{ $service->product->name }} completed successfully.',
+            'mail_enabled' => 'force',
+            'in_app_enabled' => 'choice_on',
+            'edit_preference_message' => 'Notify me when vKloud service provisioning completes',
+            'in_app_url' => '{{ route("services.show", $service) }}',
+        ],
         'server_suspended' => [
             'subject' => 'Service suspended',
             'body' => <<<'HTML'

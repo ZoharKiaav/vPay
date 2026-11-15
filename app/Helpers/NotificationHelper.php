@@ -194,6 +194,19 @@ class NotificationHelper
         self::sendNotification('new_server_created', $data, $user);
     }
 
+    public static function vkloudServiceFulfilledNotification(
+        User $user,
+        Service $service,
+        array $data = [],
+    ): void {
+        $data['service'] = $service;
+
+        self::sendNotification(
+            'vkloud_service_fulfilled',
+            $data,
+            $user,
+        );
+    }
     public static function serverSuspendedNotification(User $user, Service $service, array $data = []): void
     {
         $data['service'] = $service;
